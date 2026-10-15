@@ -29,31 +29,71 @@ inclusion in the bundle as evidence that it has been tested.
 
 ## Building from source
 
-Use a native Apple Silicon terminal, not a terminal running under Rosetta.
-Prerequisites are Xcode Command Line Tools, Rust/Cargo and Python 3. This build
-has no third-party Rust dependencies and uses Cargo's offline mode. Ripgrep,
-Homebrew, a paid developer certificate and a full Xcode installation are not
-required by the build.
+Open **Terminal** on your Apple Silicon Mac (without Rosetta). Paste each block
+below in order, waiting for it to finish before continuing. These are one-time
+prerequisites; you can skip an installer if that tool is already set up.
+
+**1. Install Apple's command line tools:**
 
 ```sh
 xcode-select --install
 ```
 
-Install Rust using the instructions at [rustup](https://rustup.rs). Check Python
-with `python3 --version`. Once the prerequisites are available:
+Click **Install** in the macOS dialog and wait for installation to finish.
+If Terminal says the tools are already installed, continue.
+
+**2. Install Rust and Cargo using [rustup](https://rust-lang.org/tools/install/):**
 
 ```sh
-cd FastTrackUltra-AppleSilicon
-make doctor
-make
-make install
-make check
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal &&
+. "$HOME/.cargo/env"
 ```
 
-Run `make` as yourself; only deployment requests administrator rights. Do not
-run `sudo make`. `make install` rebuilds as needed, validates the bundle, stages
-it outside the HAL directory, preserves the existing driver, and replaces it.
+**3. Install Python using the official [Python 3.13 installer](https://www.python.org/downloads/release/python-31316/):**
+
+```sh
+ftu_python_dir="$(mktemp -d)" &&
+curl --proto '=https' --tlsv1.2 -fL \
+  https://www.python.org/ftp/python/3.13.16/python-3.13.16-macos11.pkg \
+  -o "$ftu_python_dir/python.pkg" &&
+sudo /usr/sbin/installer -pkg "$ftu_python_dir/python.pkg" -target / &&
+export PATH="/Library/Frameworks/Python.framework/Versions/3.13/bin:$PATH"
+```
+
+Enter your Mac login password when asked; Terminal does not display it as you
+type. The Rust and Python blocks make the tools available in this same Terminal
+window. No Homebrew, `pip` packages or manual shell-file edits are needed to
+build and install the driver.
+
+**4. Build and install the driver:**
+
+In Terminal, enter the project folder. You can type `cd ` (including the space),
+drag the folder from Finder into Terminal, and press Return. Quit audio
+applications, then paste:
+
+```sh
+make install
+```
+
+This command checks the prerequisites, compiles and validates the driver, then
+asks for an administrator password to install it. A separate `make` step is
+optional. Do not run `sudo make install`.
+
+For a prerequisite check without building or installing, run `make doctor`.
+The build uses Cargo's offline mode and has no third-party Rust dependencies.
+Ripgrep, a paid developer certificate and a full Xcode installation are not
+required. Optional loopback analysis has separate development dependencies;
+they are not needed for `make install`.
+
+Only deployment requests administrator rights. Installation stages the bundle
+outside the HAL directory, preserves the existing driver, and replaces it.
 CoreAudio restarts afterward. Installation does not choose a default device.
+Select **Fast Track Ultra** in System Settings → Sound or your application's
+audio settings, then inspect the loaded driver with:
+
+```sh
+make check
+```
 
 `make` builds the driver and diagnostics. `make help` lists the commands.
 `make version` shows the source version and content identity; `make check`
@@ -63,8 +103,8 @@ the content identity also distinguishes uncommitted code changes.
 
 ## Updating and removing
 
-After obtaining updated source, run `make` and `make install` again. With a
-prebuilt package, open the newer install package. Replaced bundles are kept in:
+After obtaining updated source, run `make install` again; it rebuilds as needed.
+With a prebuilt package, open the newer install package. Replaced bundles are kept in:
 
 ```text
 /Library/Audio/Plug-Ins/FastTrackUltra-Backups/

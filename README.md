@@ -22,19 +22,64 @@ See [current status](docs/STATUS.md) before relying on it for a session.
 
 ## Install
 
-The source workflow follows the E-MU driver. Install Xcode Command Line Tools,
-Rust from [rustup](https://rustup.rs), and Python 3, then run from this checkout:
+Open **Terminal** on your Apple Silicon Mac (without Rosetta). Paste each block
+below in order, waiting for it to finish before continuing. These are one-time
+prerequisites; you can skip an installer if that tool is already set up.
+
+**1. Install Apple's command line tools:**
 
 ```sh
-make
-make install
-make check
+xcode-select --install
 ```
 
-`make install` asks for an administrator password, backs up the previous driver,
-and restarts CoreAudio. Quit audio applications first. Then select **Fast Track
-Ultra** in System Settings → Sound or your application's audio settings. Start
-with monitor volume low. Keep the interface's external power supply connected.
+Click **Install** in the macOS dialog and wait for installation to finish.
+If Terminal says the tools are already installed, continue.
+
+**2. Install Rust and Cargo using [rustup](https://rust-lang.org/tools/install/):**
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal &&
+. "$HOME/.cargo/env"
+```
+
+**3. Install Python using the official [Python 3.13 installer](https://www.python.org/downloads/release/python-31316/):**
+
+```sh
+ftu_python_dir="$(mktemp -d)" &&
+curl --proto '=https' --tlsv1.2 -fL \
+  https://www.python.org/ftp/python/3.13.16/python-3.13.16-macos11.pkg \
+  -o "$ftu_python_dir/python.pkg" &&
+sudo /usr/sbin/installer -pkg "$ftu_python_dir/python.pkg" -target / &&
+export PATH="/Library/Frameworks/Python.framework/Versions/3.13/bin:$PATH"
+```
+
+Enter your Mac login password when asked; Terminal does not display it as you
+type. The Rust and Python blocks make the tools available in this same Terminal
+window. No Homebrew, `pip` packages or manual shell-file edits are needed to
+build and install the driver.
+
+**4. Build and install the driver:**
+
+In Terminal, enter the project folder. You can type `cd ` (including the space),
+drag the folder from Finder into Terminal, and press Return. Quit audio
+applications, then paste:
+
+```sh
+make install
+```
+
+This command checks the prerequisites, compiles and validates the driver, then
+asks for an administrator password to install it. A separate `make` step is
+optional. Do not run `sudo make install`.
+
+Installation backs up the previous driver and restarts CoreAudio. Select
+**Fast Track Ultra** in System Settings → Sound or your application's audio
+settings. Start with monitor volume low. Keep the interface's external power
+supply connected. To check that CoreAudio loaded the driver, run:
+
+```sh
+make check
+```
 
 To remove the driver:
 
@@ -77,12 +122,7 @@ what you tried and heard, and `make check` output. Redact personal information.
 | [Baseline](docs/LOOPBACK-QUALIFICATION.md) | GarageBand, buffers and measured latency |
 | [Documentation](docs/README.md) | Findings, diagnostics and source provenance |
 
-## History and license
-
-This is the clean contributor repository extracted from the frozen
-[M-Audio research archive](https://github.com/bbatarelo/M-Audio-FastTrackUltra-Apple-Silicon).
-[Provenance](docs/PROVENANCE.md) records the exact source commit and fixture
-hashes. The archive is not needed to build or test this project.
+## License
 
 The [E-MU project](https://github.com/bbatarelo/emu-apple-silicon) informed the
 workflow; [ASFireWire lessons](docs/ASFW-REUSE.md) informed timing and measurement.
