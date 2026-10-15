@@ -1,0 +1,9 @@
+{
+  "rate": 44100,
+  "seconds": 30,
+  "channels": 2,
+  "bits": 16,
+  "signal": "melody",
+  "peak_pcm16": 257,
+  "sha256": "00306a749df647c19764a983d638a86a554972430dbc405387423b33f818756e"
+}

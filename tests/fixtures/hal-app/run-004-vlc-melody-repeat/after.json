@@ -1,0 +1,26 @@
+{
+  "utc": "2026-10-15T19:17:45.888683+00:00",
+  "device": 117,
+  "status": {
+    "phase": 0,
+    "epoch": 7,
+    "captured": 1446638,
+    "prepared": 1445102,
+    "playback_missing": 4800,
+    "capture_missing": 0,
+    "pending": [
+      0,
+      0
+    ],
+    "cleanup": 0,
+    "fault": 0,
+    "reason": 0,
+    "submit_status": 0,
+    "submit_direction": 0,
+    "submit_sequence": 0,
+    "submit_start": 0,
+    "submit_checked": 0,
+    "submit_returned": 0
+  },
+  "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":0,\"epoch\":7,\"captured\":1446638,\"prepared\":1445102,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[0,0],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+}

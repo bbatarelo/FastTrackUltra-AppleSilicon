@@ -1,0 +1,7 @@
+[workspace]
+members = ["rust/ftu-protocol", "rust/ftu-stream"]
+resolver = "2"
+
+[profile.release]
+panic = "unwind"
+overflow-checks = true

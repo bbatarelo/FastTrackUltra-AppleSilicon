@@ -1,0 +1,1328 @@
+[
+  {
+    "utc": "2026-10-15T19:17:14.634954+00:00",
+    "device": 117,
+    "status": {
+      "phase": 0,
+      "epoch": 6,
+      "captured": 14404927,
+      "prepared": 14403007,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        0,
+        0
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":0,\"epoch\":6,\"captured\":14404927,\"prepared\":14403007,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[0,0],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:15.407316+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 6145,
+      "prepared": 4225,
+      "playback_missing": 1153,
+      "capture_missing": 0,
+      "pending": [
+        3,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":6145,\"prepared\":4225,\"playback_missing\":1153,\"capture_missing\":0,\"pending\":[3,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:16.012236+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 34948,
+      "prepared": 33411,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":34948,\"prepared\":33411,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:16.615470+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 64134,
+      "prepared": 62214,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        3,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":64134,\"prepared\":62214,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[3,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:17.225316+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 93320,
+      "prepared": 91784,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":93320,\"prepared\":91784,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:17.832268+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 122506,
+      "prepared": 120970,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":122506,\"prepared\":120970,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:18.438606+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 151308,
+      "prepared": 149772,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":151308,\"prepared\":149772,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:19.063104+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 181263,
+      "prepared": 179727,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":181263,\"prepared\":179727,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:19.671285+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 210449,
+      "prepared": 208913,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":210449,\"prepared\":208913,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:20.282687+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 240019,
+      "prepared": 238483,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":240019,\"prepared\":238483,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:20.888610+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 269205,
+      "prepared": 267669,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":269205,\"prepared\":267669,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:21.498338+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 298392,
+      "prepared": 296855,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":298392,\"prepared\":296855,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:22.104010+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 327578,
+      "prepared": 326042,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":327578,\"prepared\":326042,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:22.713491+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 356764,
+      "prepared": 355228,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":356764,\"prepared\":355228,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:23.321261+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 385950,
+      "prepared": 384414,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":385950,\"prepared\":384414,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:23.929186+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 415136,
+      "prepared": 413600,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":415136,\"prepared\":413600,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:24.542462+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 444323,
+      "prepared": 442787,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":444323,\"prepared\":442787,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:25.153600+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 473893,
+      "prepared": 472356,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":473893,\"prepared\":472356,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:25.759553+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 502695,
+      "prepared": 501159,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":502695,\"prepared\":501159,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:26.365950+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 531881,
+      "prepared": 530345,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":531881,\"prepared\":530345,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:26.968717+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 561067,
+      "prepared": 559531,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":561067,\"prepared\":559531,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:27.575261+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 589870,
+      "prepared": 588333,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":589870,\"prepared\":588333,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:28.194553+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 619824,
+      "prepared": 618288,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":619824,\"prepared\":618288,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:28.801309+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 649010,
+      "prepared": 647474,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":649010,\"prepared\":647474,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:29.405736+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 677812,
+      "prepared": 676276,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":677812,\"prepared\":676276,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:30.012500+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 706999,
+      "prepared": 705462,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":706999,\"prepared\":705462,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:30.622559+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 736185,
+      "prepared": 734649,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":736185,\"prepared\":734649,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:31.234070+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 765755,
+      "prepared": 764219,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":765755,\"prepared\":764219,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:31.844816+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 794941,
+      "prepared": 793405,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":794941,\"prepared\":793405,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:32.453663+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 824127,
+      "prepared": 822591,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":824127,\"prepared\":822591,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:33.058892+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 853314,
+      "prepared": 851777,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":853314,\"prepared\":851777,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:33.669248+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 882500,
+      "prepared": 880964,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":882500,\"prepared\":880964,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:34.277581+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 911686,
+      "prepared": 910150,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":911686,\"prepared\":910150,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:34.885778+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 940872,
+      "prepared": 939336,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":940872,\"prepared\":939336,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:35.513520+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 971210,
+      "prepared": 969674,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":971210,\"prepared\":969674,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:36.135058+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1000780,
+      "prepared": 999245,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1000780,\"prepared\":999245,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:36.744629+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1030351,
+      "prepared": 1028815,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1030351,\"prepared\":1028815,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:37.349316+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1059153,
+      "prepared": 1057617,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1059153,\"prepared\":1057617,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:37.960809+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1088723,
+      "prepared": 1087187,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1088723,\"prepared\":1087187,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:38.569351+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1117909,
+      "prepared": 1116373,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1117909,\"prepared\":1116373,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:39.175956+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1147096,
+      "prepared": 1145560,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1147096,\"prepared\":1145560,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:39.787122+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1176282,
+      "prepared": 1174746,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1176282,\"prepared\":1174746,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:40.402698+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1205852,
+      "prepared": 1204316,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        3
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1205852,\"prepared\":1204316,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,3],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:41.011263+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1235038,
+      "prepared": 1233502,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1235038,\"prepared\":1233502,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:41.626407+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1264609,
+      "prepared": 1263073,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1264609,\"prepared\":1263073,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:42.239791+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1293795,
+      "prepared": 1292259,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1293795,\"prepared\":1292259,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:42.843696+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1322981,
+      "prepared": 1321445,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1322981,\"prepared\":1321445,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:43.451301+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1352167,
+      "prepared": 1350631,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1352167,\"prepared\":1350631,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:44.059899+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1381353,
+      "prepared": 1379817,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1381353,\"prepared\":1379817,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:44.671278+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1410540,
+      "prepared": 1409003,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1410540,\"prepared\":1409003,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  },
+  {
+    "utc": "2026-10-15T19:17:45.279076+00:00",
+    "device": 117,
+    "status": {
+      "phase": 2,
+      "epoch": 7,
+      "captured": 1439726,
+      "prepared": 1438190,
+      "playback_missing": 4800,
+      "capture_missing": 0,
+      "pending": [
+        4,
+        4
+      ],
+      "cleanup": 0,
+      "fault": 0,
+      "reason": 0,
+      "submit_status": 0,
+      "submit_direction": 0,
+      "submit_sequence": 0,
+      "submit_start": 0,
+      "submit_checked": 0,
+      "submit_returned": 0
+    },
+    "stdout": "uid: net.batarelo.FastTrackUltra:2080:20211100\nbuild: dev-52fd826950ff00d3\nstatus: {\"phase\":2,\"epoch\":7,\"captured\":1439726,\"prepared\":1438190,\"playback_missing\":4800,\"capture_missing\":0,\"pending\":[4,4],\"cleanup\":0,\"fault\":0,\"reason\":0,\"submit_status\":0,\"submit_direction\":0,\"submit_sequence\":0,\"submit_start\":0,\"submit_checked\":0,\"submit_returned\":0}\ndevice: 117, alive: 1, rate: 48000, buffer: 192\ninput: properties=ok, channels=8, bytes/frame=32, safety=1024, latency=0\noutput: properties=ok, channels=8, bytes/frame=32, safety=4096, latency=0\n"
+  }
+]

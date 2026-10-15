@@ -1,0 +1,196 @@
+{
+  "archive_repository": "https://github.com/bbatarelo/M-Audio-FastTrackUltra-Apple-Silicon",
+  "archive_commit": "9c87ae0fc82fbe995641436e4841a720c519fee0",
+  "files": {
+    "tests/fixtures/descriptors/ultra-config-0.bin": {
+      "archive_path": "captures/descriptors/2026-10-15-ultra-initial/probe/config-0.bin",
+      "sha256": "b61f44d1b742de07c0587155acca8e33f45d67a1ce0360230d6350ae004e112d",
+      "bytes": 340
+    },
+    "tests/fixtures/capture/run-001/plan.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-001/plan.json",
+      "sha256": "b2ba1c1eacb2d3dd007a6fa7d7a50ad8dab95addc7bf2f19c732335e0c8e97cd",
+      "bytes": 293
+    },
+    "tests/fixtures/capture/run-001/summary.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-001/summary.json",
+      "sha256": "99ae5165fcd56705fb9876ec63ebc6d98c7249aa4547032e604da0fd27b5d94d",
+      "bytes": 1898
+    },
+    "tests/fixtures/capture/run-001/observations.jsonl.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-001/observations.jsonl.gz",
+      "sha256": "4c9d00fb2ef1e2794c73ec3af8638807a13c0073040660c8279328c155087f6b",
+      "bytes": 36328
+    },
+    "tests/fixtures/capture/run-001/packets.bin.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-001/packets.bin.gz",
+      "sha256": "fa61f1e01879d4519e61248d8e60b74b608883104c32a8c988aee02f352c51f4",
+      "bytes": 122607
+    },
+    "tests/fixtures/capture/run-001/audio.s24le.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-001/audio.s24le.gz",
+      "sha256": "4fa01ebd9b32aeafb2bdb13bf330bd2d36d20a45b752646a001c53f3ca0f59c2",
+      "bytes": 113196
+    },
+    "tests/fixtures/capture/run-002/plan.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-002/plan.json",
+      "sha256": "b2ba1c1eacb2d3dd007a6fa7d7a50ad8dab95addc7bf2f19c732335e0c8e97cd",
+      "bytes": 293
+    },
+    "tests/fixtures/capture/run-002/summary.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-002/summary.json",
+      "sha256": "d7425666a82ae61666856f0770b7012afd6e3fc4260708f600d2f6cdf03bd1eb",
+      "bytes": 1897
+    },
+    "tests/fixtures/capture/run-002/observations.jsonl.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-002/observations.jsonl.gz",
+      "sha256": "5fc34bfd0c7fea91897982d7e94e919d91225793cd1c68b63ff01b35cd825ab2",
+      "bytes": 36297
+    },
+    "tests/fixtures/capture/run-002/packets.bin.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-002/packets.bin.gz",
+      "sha256": "06ecd496504f3ff26cbbb04926dd04b728c51cd3191601446a9f5854aa6afc5b",
+      "bytes": 122603
+    },
+    "tests/fixtures/capture/run-002/audio.s24le.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-002/audio.s24le.gz",
+      "sha256": "5b698ebd81a68df824b485eaa82c0e1e199da5823ad24ab7fd1657b0715b27c4",
+      "bytes": 113242
+    },
+    "tests/fixtures/capture/run-003/plan.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-003/plan.json",
+      "sha256": "fabc07fe43d197002c083efe659d6dfe39e8a4dce7e1ce618a66f033b18220d3",
+      "bytes": 294
+    },
+    "tests/fixtures/capture/run-003/summary.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-003/summary.json",
+      "sha256": "ac67cf19bd8be9471b736387d39d1f025848327b69156b9fe20697806ea4c95e",
+      "bytes": 1904
+    },
+    "tests/fixtures/capture/run-003/observations.jsonl.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-003/observations.jsonl.gz",
+      "sha256": "4d8a7db2a99de0fb92708cdcc41387ca9f1877d7965183050daf477bbb6ca0a5",
+      "bytes": 140190
+    },
+    "tests/fixtures/capture/run-003/packets.bin.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-003/packets.bin.gz",
+      "sha256": "6b2e5b06a7d945d99eee59506503fb94523bea2a902997a78c2a32afab200cef",
+      "bytes": 477261
+    },
+    "tests/fixtures/capture/run-003/audio.s24le.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-003/audio.s24le.gz",
+      "sha256": "10a0653c02bdd1ccdabdfdd4a60390967eff315dcfc37cafce279ba85c1660c8",
+      "bytes": 440068
+    },
+    "tests/fixtures/capture/run-004-interrupted/plan.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-004-interrupted/plan.json",
+      "sha256": "98dc745a65c8552e6ffc614b9d169292f567264be01b31b9b105e11017daa8c6",
+      "bytes": 294
+    },
+    "tests/fixtures/capture/run-004-interrupted/summary.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-004-interrupted/summary.json",
+      "sha256": "763dbe2d2ca71ac7205d23cadd633b719b8d18fed280ee4d82b78b14480eb28c",
+      "bytes": 1907
+    },
+    "tests/fixtures/capture/run-004-interrupted/observations.jsonl.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-004-interrupted/observations.jsonl.gz",
+      "sha256": "01b0d412c2f1630925bf213f8a137bbdf2f0628c897188027836b67f0f82779d",
+      "bytes": 193681
+    },
+    "tests/fixtures/capture/run-004-interrupted/packets.bin.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-004-interrupted/packets.bin.gz",
+      "sha256": "076017eddec698a4b2b4b06345b285536eea8c8457ce0603bbc233d774d7c5f0",
+      "bytes": 37547
+    },
+    "tests/fixtures/capture/run-004-interrupted/audio.s24le.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-004-interrupted/audio.s24le.gz",
+      "sha256": "403d7df0d2f4f6f2bcebd3835567305aa558b0b469aacd7bf857fc395304e093",
+      "bytes": 32288
+    },
+    "tests/fixtures/capture/run-005-after-stop/plan.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-005-after-stop/plan.json",
+      "sha256": "b2ba1c1eacb2d3dd007a6fa7d7a50ad8dab95addc7bf2f19c732335e0c8e97cd",
+      "bytes": 293
+    },
+    "tests/fixtures/capture/run-005-after-stop/summary.json": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-005-after-stop/summary.json",
+      "sha256": "27df5f7e20e6050cd0f59f4d306883b12eb1199d1e91eadd9095a96f07a89393",
+      "bytes": 1899
+    },
+    "tests/fixtures/capture/run-005-after-stop/observations.jsonl.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-005-after-stop/observations.jsonl.gz",
+      "sha256": "42c8bd354c9b42606001a6d99e9b186f185e95177e49278009faa541463dd168",
+      "bytes": 36307
+    },
+    "tests/fixtures/capture/run-005-after-stop/packets.bin.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-005-after-stop/packets.bin.gz",
+      "sha256": "71c8c7f32be06383ce9b0dabf8bbfa4993aee0871aa673b3d45a7a1cf2f4999e",
+      "bytes": 122466
+    },
+    "tests/fixtures/capture/run-005-after-stop/audio.s24le.gz": {
+      "archive_path": "captures/usb/2026-10-15-ultra-capture/run-005-after-stop/audio.s24le.gz",
+      "sha256": "66f6dc1750cef232a893e5e7b9052247720e95101ece5d161639f57989acc43c",
+      "bytes": 113146
+    },
+    "tests/fixtures/hal-app/candidate.json": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/candidate.json",
+      "sha256": "5de552be629d3fc580c5587473ec45155461b2747cdb96a9a707275f5f6c270e",
+      "bytes": 600
+    },
+    "tests/fixtures/hal-app/hal-check.bin": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/hal-check.bin",
+      "sha256": "0b1eed2286bb8d468ae2be6c15feb24e5eb98fbb3d484599f49c2988e99fad67",
+      "bytes": 35608
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/after.json": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/after.json",
+      "sha256": "2b60b324d62c9c92c3f71f13d9f4a8bfff42e5e9dadbbe362bdf60b39a49f780",
+      "bytes": 1064
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/before.json": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/before.json",
+      "sha256": "07bc69d06503d15d99a71f29783ed82116921c42ffffda64dd33c4294d7c0634",
+      "bytes": 1068
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/fixture.json": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/fixture.json",
+      "sha256": "707e887c90b475bf5f097d1b503ee80499b0b52e728fc61ebd105e70dab51e86",
+      "bytes": 191
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/fixture.wav.gz": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/fixture.wav.gz",
+      "sha256": "2b53d13abee97d582463e4e58b73f0c736166c1fccd47eca0f0eabaa4769cf1d",
+      "bytes": 2769091
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/invocation.json": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/invocation.json",
+      "sha256": "f1c114fcd6db06b58aac1b68df1a57114a3d762c1c48097e8f7fa28b3321061a",
+      "bytes": 821
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/ioreg-after.txt": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/ioreg-after.txt",
+      "sha256": "3437d74b6243294ab850798b3600d3f4cf4b8c3f277b31036f2cba436e1db2cc",
+      "bytes": 7176
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/ioreg-before.txt": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/ioreg-before.txt",
+      "sha256": "0b9dace75b26a14611f2e34a8263fc6366d226c428f56fb694e4ceb9a03c32b9",
+      "bytes": 7176
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/observations.json": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/observations.json",
+      "sha256": "f4c64101524e62494e72fdb836a450dec1f015b354ce2646503d4fe1865c4ad1",
+      "bytes": 56816
+    },
+    "tests/fixtures/hal-app/run-004-vlc-melody-repeat/stderr.txt": {
+      "archive_path": "captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/stderr.txt",
+      "sha256": "dc9fd5063b6f8f413152cede49152f6c4a4b264a9e94b0bb3d71fc4416fbe9c0",
+      "bytes": 23291
+    },
+    "rust/ftu-protocol/tests/fixtures/config-0.bin": {
+      "archive_path": "rust/ftu-protocol/tests/fixtures/config-0.bin",
+      "sha256": "b61f44d1b742de07c0587155acca8e33f45d67a1ce0360230d6350ae004e112d",
+      "bytes": 340
+    }
+  }
+}

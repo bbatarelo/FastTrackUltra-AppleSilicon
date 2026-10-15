@@ -1,0 +1,3 @@
+# Recorded observations are byte-exact fixtures, including original whitespace.
+tests/fixtures/** -text -whitespace
+rust/ftu-protocol/tests/fixtures/*.bin -text

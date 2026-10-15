@@ -1,0 +1,14 @@
+[package]
+name = "ftu-protocol"
+version = "0.1.0"
+license = "MIT"
+edition = "2021"
+publish = false
+description = "Portable Fast Track Ultra core: capture model, profiles, PCM, control plan"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+# No dependencies by design. panic = "abort" for release is configured by the
+# parent workspace; every exported function validates before indexing.
+[dependencies]

@@ -1,0 +1,1 @@
+{"schema_version":1,"duration_ms":2048,"required_rate_hz":48000,"interface":2,"alternate":1,"endpoint":129,"packet_capacity":312,"service_interval_us":125,"block_ms":8,"entries_per_block":64,"queue_depth":4,"schedule_lead_ms":16,"drain_timeout_ms":1000,"timebase_numer":125,"timebase_denom":3}

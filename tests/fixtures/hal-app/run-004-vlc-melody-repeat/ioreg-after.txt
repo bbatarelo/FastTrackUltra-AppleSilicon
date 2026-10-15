@@ -1,0 +1,180 @@
++-o Fast Track Ultra@20211100  <class IOUSBHostDevice, id 0x1006c7a85, registered, matched, active, busy 0 (43816 ms), retain 137>
+  | {
+  |   "sessionID" = 4999716284306
+  |   "USBSpeed" = 3
+  |   "UsbLinkSpeed" = 480000000
+  |   "idProduct" = 8320
+  |   "iManufacturer" = 1
+  |   "bDeviceClass" = 0
+  |   "IOPowerManagement" = {"PowerOverrideOn"=Yes,"DevicePowerState"=2,"CurrentPowerState"=2,"CapabilityFlags"=32768,"MaxPowerState"=2,"DriverPowerState"=0}
+  |   "bcdDevice" = 337
+  |   "bMaxPacketSize0" = 64
+  |   "iProduct" = 2
+  |   "iSerialNumber" = 0
+  |   "bNumConfigurations" = 1
+  |   "UsbDeviceSignature" = <630780205101000000ff0100ff0200010300fe0100>
+  |   "USB Product Name" = "Fast Track Ultra"
+  |   "locationID" = 539037952
+  |   "bDeviceSubClass" = 0
+  |   "bcdUSB" = 512
+  |   "USB Address" = 20
+  |   "kUSBCurrentConfiguration" = 1
+  |   "IOCFPlugInTypes" = {"9dc7b780-9ec0-11d4-a54f-000a27052861"="IOUSBHostFamily.kext/Contents/PlugIns/IOUSBLib.bundle"}
+  |   "bDeviceProtocol" = 0
+  |   "USBPortType" = 0
+  |   "IOServiceDEXTEntitlements" = (("com.apple.developer.driverkit.transport.usb"))
+  |   "USB Vendor Name" = "M-Audio"
+  |   "Device Speed" = 2
+  |   "idVendor" = 1891
+  |   "kUSBProductString" = "Fast Track Ultra"
+  |   "kUSBAddress" = 20
+  |   "kUSBVendorString" = "M-Audio"
+  | }
+  | 
+  +-o AppleUSBHostCompositeDevice  <class AppleUSBHostCompositeDevice, id 0x1006c7a89, !registered, !matched, active, busy 0, retain 4>
+  |   {
+  |     "IOProbeScore" = 50000
+  |     "CFBundleIdentifier" = "com.apple.driver.usb.AppleUSBHostCompositeDevice"
+  |     "IOProviderClass" = "IOUSBHostDevice"
+  |     "IOClass" = "AppleUSBHostCompositeDevice"
+  |     "IOPersonalityPublisher" = "com.apple.driver.usb.AppleUSBHostCompositeDevice"
+  |     "bDeviceSubClass" = 0
+  |     "CFBundleIdentifierKernel" = "com.apple.driver.usb.AppleUSBHostCompositeDevice"
+  |     "IOMatchedAtBoot" = Yes
+  |     "IOMatchCategory" = "IODefaultMatchCategory"
+  |     "IOPrimaryDriverTerminateOptions" = Yes
+  |     "bDeviceClass" = 0
+  |   }
+  |   
+  +-o Fast Track Ultra@0  <class IOUSBHostInterface, id 0x1006c7a8a, registered, matched, active, busy 0 (8883 ms), retain 5>
+  |   {
+  |     "USBPortType" = 0
+  |     "kUSBString" = "Fast Track Ultra"
+  |     "IOCFPlugInTypes" = {"2d9786c6-9ef3-11d4-ad51-000a27052861"="IOUSBHostFamily.kext/Contents/PlugIns/IOUSBLib.bundle"}
+  |     "USB Vendor Name" = "M-Audio"
+  |     "bcdDevice" = 337
+  |     "USBSpeed" = 3
+  |     "idProduct" = 8320
+  |     "IOServiceDEXTEntitlements" = (("com.apple.developer.driverkit.transport.usb"))
+  |     "bInterfaceSubClass" = 1
+  |     "bConfigurationValue" = 1
+  |     "locationID" = 539037952
+  |     "USB Product Name" = "Fast Track Ultra"
+  |     "bInterfaceProtocol" = 0
+  |     "iInterface" = 2
+  |     "bAlternateSetting" = 0
+  |     "idVendor" = 1891
+  |     "bInterfaceNumber" = 0
+  |     "bInterfaceClass" = 255
+  |     "bNumEndpoints" = 0
+  |   }
+  |   
+  +-o cef_server  <class AppleUSBHostDeviceUserClient, id 0x1006c7a8b, !registered, !matched, active, busy 0, retain 7>
+  |   {
+  |     "IOUserClientCreator" = "pid 10405, cef_server"
+  |     "IOUserClientDefaultLocking" = Yes
+  |   }
+  |   
+  +-o IOUSBHostInterface@1  <class IOUSBHostInterface, id 0x1006c7a8c, registered, matched, active, busy 0 (8799 ms), retain 6>
+  |   {
+  |     "USBPortType" = 0
+  |     "IOCFPlugInTypes" = {"2d9786c6-9ef3-11d4-ad51-000a27052861"="IOUSBHostFamily.kext/Contents/PlugIns/IOUSBLib.bundle"}
+  |     "USB Vendor Name" = "M-Audio"
+  |     "bcdDevice" = 337
+  |     "USBSpeed" = 3
+  |     "idProduct" = 8320
+  |     "IOServiceDEXTEntitlements" = (("com.apple.developer.driverkit.transport.usb"))
+  |     "bInterfaceSubClass" = 2
+  |     "bConfigurationValue" = 1
+  |     "locationID" = 539037952
+  |     "USB Product Name" = "Fast Track Ultra"
+  |     "bInterfaceProtocol" = 0
+  |     "iInterface" = 0
+  |     "bAlternateSetting" = 0
+  |     "idVendor" = 1891
+  |     "bInterfaceNumber" = 1
+  |     "bInterfaceClass" = 255
+  |     "bNumEndpoints" = 0
+  |   }
+  |   
+  +-o IOUSBHostInterface@2  <class IOUSBHostInterface, id 0x1006c7a8d, registered, matched, active, busy 0 (8534 ms), retain 6>
+  |   {
+  |     "USBPortType" = 0
+  |     "IOCFPlugInTypes" = {"2d9786c6-9ef3-11d4-ad51-000a27052861"="IOUSBHostFamily.kext/Contents/PlugIns/IOUSBLib.bundle"}
+  |     "USB Vendor Name" = "M-Audio"
+  |     "bcdDevice" = 337
+  |     "USBSpeed" = 3
+  |     "idProduct" = 8320
+  |     "IOServiceDEXTEntitlements" = (("com.apple.developer.driverkit.transport.usb"))
+  |     "bInterfaceSubClass" = 2
+  |     "bConfigurationValue" = 1
+  |     "locationID" = 539037952
+  |     "USB Product Name" = "Fast Track Ultra"
+  |     "bInterfaceProtocol" = 0
+  |     "iInterface" = 0
+  |     "bAlternateSetting" = 0
+  |     "idVendor" = 1891
+  |     "bInterfaceNumber" = 2
+  |     "bInterfaceClass" = 255
+  |     "bNumEndpoints" = 0
+  |   }
+  |   
+  +-o Fast Track Ultra@3  <class IOUSBHostInterface, id 0x1006c7a8e, registered, matched, active, busy 0 (8829 ms), retain 5>
+  |   {
+  |     "USBPortType" = 0
+  |     "kUSBString" = "Fast Track Ultra"
+  |     "IOCFPlugInTypes" = {"2d9786c6-9ef3-11d4-ad51-000a27052861"="IOUSBHostFamily.kext/Contents/PlugIns/IOUSBLib.bundle"}
+  |     "USB Vendor Name" = "M-Audio"
+  |     "bcdDevice" = 337
+  |     "USBSpeed" = 3
+  |     "idProduct" = 8320
+  |     "IOServiceDEXTEntitlements" = (("com.apple.developer.driverkit.transport.usb"))
+  |     "bInterfaceSubClass" = 3
+  |     "bConfigurationValue" = 1
+  |     "locationID" = 539037952
+  |     "USB Product Name" = "Fast Track Ultra"
+  |     "bInterfaceProtocol" = 0
+  |     "iInterface" = 5
+  |     "bAlternateSetting" = 0
+  |     "idVendor" = 1891
+  |     "bInterfaceNumber" = 3
+  |     "bInterfaceClass" = 1
+  |     "bNumEndpoints" = 2
+  |   }
+  |   
+  +-o M-Audio DFU@4  <class IOUSBHostInterface, id 0x1006c7a8f, registered, matched, active, busy 0 (8834 ms), retain 5>
+  |   {
+  |     "USBPortType" = 0
+  |     "kUSBString" = "M-Audio DFU"
+  |     "IOCFPlugInTypes" = {"2d9786c6-9ef3-11d4-ad51-000a27052861"="IOUSBHostFamily.kext/Contents/PlugIns/IOUSBLib.bundle"}
+  |     "USB Vendor Name" = "M-Audio"
+  |     "bcdDevice" = 337
+  |     "USBSpeed" = 3
+  |     "idProduct" = 8320
+  |     "IOServiceDEXTEntitlements" = (("com.apple.developer.driverkit.transport.usb"))
+  |     "bInterfaceSubClass" = 1
+  |     "bConfigurationValue" = 1
+  |     "locationID" = 539037952
+  |     "USB Product Name" = "Fast Track Ultra"
+  |     "bInterfaceProtocol" = 0
+  |     "iInterface" = 7
+  |     "bAlternateSetting" = 0
+  |     "idVendor" = 1891
+  |     "bInterfaceNumber" = 4
+  |     "bInterfaceClass" = 254
+  |     "bNumEndpoints" = 0
+  |   }
+  |   
+  +-o ChatGPT  <class AppleUSBHostDeviceUserClient, id 0x1006c7a90, !registered, !matched, active, busy 0, retain 7>
+  |   {
+  |     "IOUserClientCreator" = "pid 960, ChatGPT"
+  |     "IOUserClientDefaultLocking" = Yes
+  |   }
+  |   
+  +-o Google Chrome  <class AppleUSBHostDeviceUserClient, id 0x1006c7a92, !registered, !matched, active, busy 0, retain 7>
+      {
+        "IOUserClientCreator" = "pid 959, Google Chrome"
+        "IOUserClientDefaultLocking" = Yes
+      }
+      
+

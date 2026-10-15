@@ -1,0 +1,34 @@
+{
+  "command": [
+    "/Applications/VLC.app/Contents/MacOS/VLC",
+    "--ignore-config",
+    "-I",
+    "dummy",
+    "--no-video",
+    "--no-media-library",
+    "--no-audio-time-stretch",
+    "--aout=auhal",
+    "--auhal-audio-device=117",
+    "--auhal-volume=256",
+    "--gain=1",
+    "--play-and-exit",
+    "-vv",
+    "/Users/bruno/development/projects/bruno/AudioInterfaces/M-Audio-FastTrackUltra/captures/hal/2026-10-15-ultra-apps/run-004-vlc-melody-repeat/fixture.wav"
+  ],
+  "started_utc": "2026-10-15T19:17:14.530499+00:00",
+  "expected_build": "dev-52fd826950ff00d3",
+  "registry_command": [
+    "ioreg",
+    "-p",
+    "IOService",
+    "-n",
+    "Fast Track Ultra",
+    "-r",
+    "-l",
+    "-w0"
+  ],
+  "exit_code": 0,
+  "finished_utc": "2026-10-15T19:17:45.785009+00:00",
+  "error": null,
+  "overlap_events": []
+}

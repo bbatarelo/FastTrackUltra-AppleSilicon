@@ -1,0 +1,11 @@
+{
+  "status":"ok","reason":null,"exit_code":0,"duration_ms":256,"interface":2,"alternate":1,"endpoint":"0x81",
+  "vid":1891,"pid":8320,"location":539037952,"original_alternate":0,"planned_blocks":32,"submitted_blocks":32,"completed_blocks":32,"pending_blocks":0,"failed_submissions":0,
+  "accepted_packets":2048,"empty_packets":0,"rejected_packets":0,"short_packets":2048,"underrun_packets":0,"accepted_audio_frames":12289,"raw_bytes":638976,"audio_bytes":294936,
+  "unobserved_packets":0,
+  "file_error":false,"cleanup_error":false,"callback_error":false,"drain_failed":false,"signal":0,
+  "cleanup_attempted":true,"alternate_restored":true,
+  "host_start_ticks":5092549032575,"host_end_ticks":5092555937831,"timebase_numer":125,"timebase_denom":3,"bus_anchor":{"usb_frame":212161284,"host_ticks":5092549126461},"scheduling_clock":{"usb_frame":212161284,"host_ticks":5092549126711,"first_frame":212161300},
+  "rate_before":[{"status":"0x00000000","actual_length":3,"accepted":true,"hz":48000,"raw_hex":"80bb00"},{"status":"0x00000000","actual_length":3,"accepted":true,"hz":48000,"raw_hex":"80bb00"}],"rate_after":[{"status":"0x00000000","actual_length":3,"accepted":true,"hz":48000,"raw_hex":"80bb00"},{"status":"0x00000000","actual_length":3,"accepted":true,"hz":48000,"raw_hex":"80bb00"}],
+  "channels":[{"channel":1,"nonzero_samples":12237,"peak":2.72989273e-05,"rms":6.93082841e-06},{"channel":2,"nonzero_samples":12221,"peak":2.70605087e-05,"rms":6.93175093e-06},{"channel":3,"nonzero_samples":12221,"peak":2.83718109e-05,"rms":6.86786743e-06},{"channel":4,"nonzero_samples":12213,"peak":2.75373459e-05,"rms":6.83358153e-06},{"channel":5,"nonzero_samples":12235,"peak":3.1709671e-05,"rms":7.07690985e-06},{"channel":6,"nonzero_samples":12222,"peak":2.72989273e-05,"rms":7.03434322e-06},{"channel":7,"nonzero_samples":0,"peak":0,"rms":0},{"channel":8,"nonzero_samples":0,"peak":0,"rms":0}]
+}

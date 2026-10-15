@@ -1,0 +1,9 @@
+{
+  "driver_build": "dev-52fd826950ff00d3",
+  "driver_sha256": "3746a325487a0181f5f0593e9c5189588b6d5c3055595c159ce762a1c226fe74",
+  "client_sha256": "0b1eed2286bb8d468ae2be6c15feb24e5eb98fbb3d484599f49c2988e99fad67",
+  "vlc_version": "3.0.20",
+  "vlc_executable_sha256": "00ac3de8d474322afcafe2fee272ca9098cfa1e627d13aea8716b5453bd2168a",
+  "source_reference": "https://raw.githubusercontent.com/videolan/vlc/3.0.x/modules/audio_output/auhal.c",
+  "source_note": "Device selector is numeric AudioDeviceID. Local VLC help confirms option; --ignore-config avoids reading/saving player preferences."
+}
