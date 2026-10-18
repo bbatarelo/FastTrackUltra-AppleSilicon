@@ -51,13 +51,18 @@ The [three-slot outcome](QUEUE-MODEL.md) preserves all seven attempts, the
   separates packet preparation from PCM deadlines; the earlier FTU model screens
   transport scheduling and the new model adds nominal sample placement. Neither
   establishes architectural parity or measured OS scheduling bounds.
-- Evaluate shorter transfers using recorded scheduling distributions. A 4 ms
-  experiment must jointly revisit native packet-count ABI, queue capacity,
-  feedback history and worker budget. The current model rejects naive 1 ms
-  transfers with unchanged feedback capacity and finds phase-dependent deadline
-  failures for four 4 ms slots. Keep actual missing samples separate from margins;
-  characterize capture constraints before lowering input safety, and prove native
-  ownership/visibility before considering any writes to submitted USB payloads.
+- Follow the [completion-delivery study](COMPLETION-STUDY.md) before selecting
+  shorter transfers. Add callback-to-pump correlation, bounded full-epoch
+  histograms and worker CPU/policy observations at unchanged geometry. The
+  existing detailed records are selected windows, not scheduling distributions.
+  In the corrected synthetic envelope, eight 4 ms slots retain 19 ms OUT lead,
+  but an additional 4 ms owner stall makes 16/64 phases miss the 16 ms screen.
+  Smaller batches alone do not reduce modeled RTL at unchanged offsets.
+  Any prototype must jointly revisit native packet-count ABI, queue capacity,
+  feedback history, publication cadence and measured worker cost. Resolve native
+  publication/lifetime before early frame-list observation or submitted-buffer
+  access. Keep actual missing samples separate from scheduling margin and
+  characterize capture constraints before lowering input safety.
 - Retain geometry/read-back regressions: the 16384-frame period now permits
   actual 4096-frame callbacks on this Mac. Extend qualification to other hosts
   and investigate the external minimum of 15 versus the declared 64.

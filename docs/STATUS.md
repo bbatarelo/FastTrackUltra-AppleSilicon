@@ -96,12 +96,18 @@ Offline checks passed 116 Rust tests, six placement-model tests, four transport-
 model tests, HAL/native/callback sanitizer checks, 18 Python tests, Clippy and
 bundle validation. Claude independently reviewed the design and new model.
 
-Next: investigate completion delivery, worker scheduling and shorter USB batches
-using the preserved longer-session measurements. The 17 ms minimum lead argues
-for retaining current margins while that work proceeds. Extend the model
-with production-pool behavior and drift, and characterize capture constraints
-before lowering input safety. The [ASFW comparison](ASFW-REUSE.md) records concrete
-methods to evaluate later in E-MU; no E-MU source has changed.
+Next: implement the measurements specified by the
+[offline completion study](COMPLETION-STUDY.md): link each callback to its actual
+run-loop invocation, collect bounded timing histograms and measure worker CPU
+cost/effective policy. The retained worst OUT events spent 6.465–7.351 ms before
+callback delivery and 0.305–0.360 ms from callback to resubmission observation.
+Those selected records are not a full distribution or a scheduling bound.
+Shorter batches alone leave modeled RTL unchanged at the current offsets, and
+no new driver candidate is selected. Keep current margins and resolve native
+visibility/ownership before early frame-list access. Extend production-pool and
+drift coverage before further safety reductions. The
+[ASFW comparison](ASFW-REUSE.md) records methods to evaluate later in E-MU; no E-MU
+source has changed.
 
 Only native 48 kHz is supported. Earlier VLC/GarageBand 44.1 kHz sessions exercised
 application conversion. Other rates, clock modes, MIDI, hotplug/sleep/wake,

@@ -59,7 +59,7 @@ At a 64-frame buffer the measured round trip decomposes as follows:
 | Term | Frames | Time |
 |---|---:|---:|
 | Input safety | 1024 | 21.333 ms |
-| Output safety | 3072 | 64.000 ms |
+| Output safety | 2560 | 53.333 ms |
 | Two client-buffer spans | 128 | 2.667 ms |
 | Timestamp-relative remainder | measured separately | about 1.206–1.227 ms |
 

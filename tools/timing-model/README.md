@@ -45,3 +45,51 @@ The independent model does not exercise the production pool or emulate macOS.
 coordinate identity and computes the explicitly limited margin screen. It needs
 the ignored measurement artifacts on the development Mac; the Rust models and
 production tests run without those recordings or any device.
+
+## Completion-delivery investigation
+
+The [completion study](../../docs/COMPLETION-STUDY.md) links retained worker
+timestamps, varies feedback capacity and serialized work, and compares shorter
+transfers at unchanged sample offsets. Both Rust commands below run entirely
+offline and require no private traces:
+
+```bash
+mkdir -p build/validation/completion-study
+cargo test --release --locked --offline -p ftu-stream --example timing_model
+cargo test --release --locked --offline -p ftu-stream --example placement_model
+cargo run --release --locked --offline -p ftu-stream --example timing_model -- --completion-study > build/validation/completion-study/transport.json
+cargo run --release --locked --offline -p ftu-stream --example placement_model -- --completion-study > build/validation/completion-study/placement.json
+python3 -B -m unittest discover -s tools/timing-model -p 'test_*.py'
+```
+
+The transport study has 90 rows / 5,280 phase/scenario runs; the placement
+study has 105 rows / 840 runs. Expected failures are retained. The transport
+report separates `transport_completed` from `out_screen_passed` at the
+16 ms comparison threshold and reports exact model lead beside bus-frame lead.
+Only completed runs can pass the screen; extrema from failed runs may precede
+the failure. Elapsed work allowances are not measured CPU time or OS bounds.
+The placement report measures missing PCM separately and is not gated by that
+transport screen.
+
+The new transport mode interrupts simulated work when an owner stall begins.
+The historical no-argument mode preserves its boundary-only stall convention
+and original output, including that limitation. Use the new mode for the
+completion investigation; do not treat the historical sweep as a model of
+preemption inside submission work.
+
+For the retained development-Mac logs only:
+
+```bash
+python3 -B tools/timing-model/completion_evidence.py --expected-build dev-8387395854108015 build/trials/2026-10-18-long-session/01-soak-64/worker.log build/trials/2026-10-18-long-session/02-soak-512/worker.log > build/validation/completion-study/linked-evidence.json
+```
+
+This read-only analyzer requires the version-1, four-slot/8 ms worker schema,
+matching build and epoch, coherent recorder banks and clean final stop. It
+rejects duplicate epochs rather than double-counting observations. It retains
+unavailable linked intervals as null and log hashes for provenance. Detailed
+retained records are biased windows, not a full timing distribution. Its
+queue-horizon counterfactual is arithmetic, not a new hardware measurement.
+
+The original investigation evidence and review are kept separately under
+`build/validation/completion-study-20261018/`; reproduction commands above
+write to a different directory.

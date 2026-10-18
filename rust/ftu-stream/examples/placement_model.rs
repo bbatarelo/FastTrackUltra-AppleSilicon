@@ -361,16 +361,38 @@ fn stresses(buffer: usize) -> [Stress; 6] {
     ]
 }
 fn main() {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    let study = args == ["--completion-study"];
+    if !args.is_empty() && !study {
+        eprintln!("usage: placement_model [--completion-study]");
+        std::process::exit(2);
+    }
     println!("{{\"schema\":1,\"hardware_qualification\":false,\"nominal_packet_frames\":6,\"analog_fixture_frames\":{ANALOG},\"rows\":[");
     let mut comma = "";
-    for (name, block_ms, depth, output) in [
-        ("baseline", 8, 4, 3072),
-        ("safety2560", 8, 4, 2560),
-        ("safety2048", 8, 4, 2048),
-        ("short4_depth6", 4, 6, 2560),
-        ("short4_depth4", 4, 4, 2048),
-    ] {
-        for buffer in [64, 128, 256, 512, 1024, 4096] {
+    let profiles = if study {
+        vec![
+            ("qualified_geometry", 8, 4, 2560),
+            ("short4_depth6", 4, 6, 2560),
+            ("short4_depth7", 4, 7, 2560),
+            ("short4_depth8", 4, 8, 2560),
+            ("short4_depth8_safety3072", 4, 8, 3072),
+        ]
+    } else {
+        vec![
+            ("baseline", 8, 4, 3072),
+            ("safety2560", 8, 4, 2560),
+            ("safety2048", 8, 4, 2048),
+            ("short4_depth6", 4, 6, 2560),
+            ("short4_depth4", 4, 4, 2048),
+        ]
+    };
+    let buffers = if study {
+        vec![64, 512, 4096]
+    } else {
+        vec![64, 128, 256, 512, 1024, 4096]
+    };
+    for (name, block_ms, depth, output) in profiles {
+        for &buffer in &buffers {
             let g = Geometry {
                 block_ms,
                 depth,
@@ -380,7 +402,17 @@ fn main() {
                 pcm_offset: REPLAY,
                 anchor_bias: 48,
             };
-            for stress in stresses(buffer) {
+            let mut scenarios = stresses(buffer).to_vec();
+            if study {
+                scenarios.push(Stress {
+                    name: "delivery_pause_8ms",
+                    callback_delay: 8 * 48,
+                    prepare: 12,
+                    submit: 12,
+                    ..CLEAN
+                });
+            }
+            for stress in scenarios {
                 let results: Vec<_> = phases(g)
                     .iter()
                     .map(|&phase| run(g, stress, phase))
@@ -432,6 +464,26 @@ mod tests {
                 assert_eq!((r.output_missing, r.input_missing), (0, 0));
                 assert_eq!(r.rtl, [Some(2 * buffer + 1024 + output + ANALOG); 2]);
                 assert_eq!(r.captured, r.replayed);
+            }
+        }
+    }
+    #[test]
+    fn shorter_batches_do_not_reduce_rtl_without_changing_reference_offsets() {
+        for depth in [6, 7, 8] {
+            for buffer in [64, 512, 4096] {
+                let g = Geometry {
+                    block_ms: 4,
+                    depth,
+                    buffer,
+                    ..geometry(2560)
+                };
+                for phase in phases(g) {
+                    let r = run(g, CLEAN, phase);
+                    assert_eq!(r.reason, None);
+                    assert_eq!((r.input_missing, r.output_missing), (0, 0));
+                    assert_eq!(r.rtl, [Some(2 * buffer + 1024 + 2560 + ANALOG); 2]);
+                    assert_eq!(r.captured, r.replayed);
+                }
             }
         }
     }

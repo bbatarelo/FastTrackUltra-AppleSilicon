@@ -277,3 +277,21 @@ historical `ADKVirtualAudioLab` checkout was not obtained or evaluated.
 The pinned ASFW repository carries Apache-2.0 and a NOTICE. No ASFW code has
 been integrated into a product here. Preserve the relevant license/attribution
 if a later task reuses its tools or implementation.
+
+## Completion evidence for a later E-MU review
+
+The [offline FTU completion study](COMPLETION-STUDY.md) adds three concrete
+measurement practices to evaluate separately in E-MU: associate a callback with
+the pump invocation that delivered it; retain bounded full-epoch timing
+histograms alongside selected worst records; and distinguish frame-list/data
+visibility from callback-controlled buffer lifetime. Selected FTU records show
+milliseconds before callback delivery and sub-millisecond local work, but do
+not attribute the delay to a particular scheduler or kernel component.
+
+A second useful check is to hold sample coordinates and safety offsets fixed
+while changing transport geometry in the model. FTU's smaller batches alone
+do not reduce modeled round trip. This guards against mistaking transport
+headroom for an audio latency improvement. These are FTU-derived follow-up
+methods inspired by the ownership/measurement approach above; they do not claim
+that ASFW implements this IOKit observation scheme or that E-MU needs the same
+constants. E-MU's API, ownership and measurements must be assessed on their own.
