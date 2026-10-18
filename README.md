@@ -102,6 +102,14 @@ Six loopback sessions used actual 64/128/192-frame buffers. These are short
 baseline results from the archived installed build, not qualification of every
 channel, device model, Mac or new build from this repository.
 
+The 16 October [timing build](docs/TIMING-GEOMETRY.md) additionally passed physical
+loopback at actual 64–4096-frame buffers, clean left/right listening, and silent
+two-client checks. The 17 October [output-safety reduction](docs/TIMING-OBSERVATION.md)
+measured **89.2 ms round trip at 64 frames**, down from 110.5 ms. All twelve
+chirp runs across six buffer sizes passed. Monitoring latency is still high;
+these are short measurements on one desktop Ultra. See [current status](docs/STATUS.md)
+for exact build identities and remaining limits.
+
 The [roadmap](docs/ROADMAP.md) covers lower latency and timing, reliability,
 MIDI input/output, a diagnostics/routing/mixer app, onboard DSP, other rates,
 clock/S/PDIF modes, Ultra 8R and distribution. The companion app will remain

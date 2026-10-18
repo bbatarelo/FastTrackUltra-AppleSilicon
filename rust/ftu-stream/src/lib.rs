@@ -2,11 +2,13 @@
 //! No HAL publication and no mixer/rate writes. Use only from a standalone probe.
 mod clock;
 mod continuous;
+mod geometry;
 mod live;
 mod native;
 mod pool;
 mod scheduler;
 pub mod timeline;
+mod timing;
 use native::*;
 use scheduler::*;
 use std::{

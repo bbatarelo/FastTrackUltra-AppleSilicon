@@ -2,6 +2,7 @@
  * --silence emits zeros; --tone emits five quiet left/right pairs.
  * No microphone samples are retained. The installed driver is not modified. */
 #include <CoreAudio/CoreAudio.h>
+#include <CoreAudio/AudioServerPlugIn.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -22,7 +23,7 @@ static bool status_is(AudioObjectID id,const char *phase){
     return ok && strstr(text,phase) && strstr(text,"\"fault\":0") && strstr(text,"\"reason\":0");
 }
 static bool print_string(AudioObjectID id,UInt32 selector,const char *label){
-    CFStringRef s=string(id,selector);char text[4096];if(!s)return false;
+    CFStringRef s=string(id,selector);char text[32768];if(!s)return false;
     bool ok=CFStringGetCString(s,text,sizeof text,kCFStringEncodingUTF8);CFRelease(s);
     if(ok)printf("%s: %s\n",label,text);return ok;
 }
@@ -63,7 +64,7 @@ static OSStatus io(AudioDeviceID device,const AudioTimeStamp *now,const AudioBuf
         c->last_output=output_time->mSampleTime+frames;
     }
     if(c->tone && valid){
-        if(output->mNumberBuffers!=1 || output->mBuffers[0].mNumberChannels!=8 || !output->mBuffers[0].mData || output->mBuffers[0].mDataByteSize!=frames*8*sizeof(float) || frames>1024){
+        if(output->mNumberBuffers!=1 || output->mBuffers[0].mNumberChannels!=8 || !output->mBuffers[0].mData || output->mBuffers[0].mDataByteSize!=frames*8*sizeof(float) || frames>4096){
             atomic_fetch_add(&c->invalid,1);
         }else{
             double relative=output_time->mSampleTime-c->first_output;
@@ -87,7 +88,12 @@ static bool describe(AudioDeviceID device){
     ok &= !get(device,kAudioDevicePropertyBufferFrameSize,kAudioObjectPropertyScopeGlobal,sizeof buffer,&buffer);
     ok &= !get(device,kAudioDevicePropertyDeviceIsAlive,kAudioObjectPropertyScopeGlobal,sizeof alive,&alive);
     printf("device: %u, alive: %u, rate: %.0f, buffer: %u\n",device,alive,rate,buffer);
-    ok &= alive==1 && rate==48000 && buffer>=64 && buffer<=1024;
+    ok &= alive==1 && rate==48000 && buffer>=64 && buffer<=4096;
+    AudioValueRange range={0};UInt32 period=0;
+    OSStatus range_status=get(device,kAudioDevicePropertyBufferFrameSizeRange,kAudioObjectPropertyScopeGlobal,sizeof range,&range);
+    OSStatus period_status=get(device,kAudioDevicePropertyZeroTimeStampPeriod,kAudioObjectPropertyScopeGlobal,sizeof period,&period);
+    /* Preserve read errors: a zero initialized value is not a measurement. */
+    printf("geometry: buffer_range_status=%d min=%.0f max=%.0f zts_status=%d period=%u\n",range_status,range.mMinimum,range.mMaximum,period_status,period);
     for(unsigned d=0;d<2;d++){
         UInt32 scope=d?kAudioObjectPropertyScopeOutput:kAudioObjectPropertyScopeInput;
         AudioObjectID stream=0;AudioStreamBasicDescription fmt={0};UInt32 safety=0,latency=0;
@@ -98,9 +104,10 @@ static bool describe(AudioDeviceID device){
     return ok;
 }
 int main(int argc,char **argv){
-    unsigned seconds=0;bool tone=false;
-    if(argc==2 && strcmp(argv[1],"--tone")==0){tone=true;seconds=12;}
-    else if(argc==3 && strcmp(argv[1],"--silence")==0){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(!*argv[2] || *end || n<1 || n>120)return 2;seconds=(unsigned)n;}else if(argc!=1){fprintf(stderr,"Usage: %s [--silence 1..120 | --tone]\n",argv[0]);return 2;}
+    unsigned seconds=0;bool tone=false,timing=false;
+    if(argc==2 && strcmp(argv[1],"--timing")==0)timing=true;
+    else if(argc==2 && strcmp(argv[1],"--tone")==0){tone=true;seconds=12;}
+    else if(argc==3 && strcmp(argv[1],"--silence")==0){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(!*argv[2] || *end || n<1 || n>120)return 2;seconds=(unsigned)n;}else if(argc!=1){fprintf(stderr,"Usage: %s [--silence 1..120 | --tone | --timing]\n",argv[0]);return 2;}
     AudioObjectPropertyAddress a={kAudioHardwarePropertyDevices,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};UInt32 bytes=0;
     if(AudioObjectGetPropertyDataSize(kAudioObjectSystemObject,&a,0,NULL,&bytes))return 1;
     AudioDeviceID *devices=calloc(1,bytes?bytes:1);if(!devices)return 1;
@@ -108,7 +115,7 @@ int main(int argc,char **argv){
     AudioDeviceID selected=0;unsigned matches=0;
     for(UInt32 i=0;i<bytes/sizeof(*devices);i++){CFStringRef uid=string(devices[i],kAudioDevicePropertyDeviceUID);if(uid){if(CFStringHasPrefix(uid,CFSTR("net.batarelo.FastTrackUltra:"))){selected=devices[i];matches++;}CFRelease(uid);}}
     free(devices);if(matches!=1){fprintf(stderr,"Expected one published FastTrackUltra device; found %u.\n",matches);return 1;}
-    if(!describe(selected))return 1;if(!seconds)return 0;
+    if(!describe(selected))return 1;if(timing)return print_string(selected,'ftuT',"timing")?0:1;if(!seconds)return 0;
     struct counters c={0};float *table=tone?make_tone():NULL;if(tone && !table)return 1;c.tone=table;AudioDeviceIOProcID proc=NULL;
     OSStatus created=AudioDeviceCreateIOProcID(selected,io,&c,&proc);if(created){fprintf(stderr,"CreateIOProc failed: %d\n",created);free(table);return 1;}
     OSStatus started=AudioDeviceStart(selected,proc);if(started){fprintf(stderr,"Start failed: %d\n",started);print_string(selected,'ftuS',"start failure status");AudioDeviceDestroyIOProcID(selected,proc);free(table);return 1;}

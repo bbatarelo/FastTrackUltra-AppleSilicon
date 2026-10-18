@@ -47,6 +47,14 @@ class AnalysisTests(unittest.TestCase):
         ts=timestamp(rows,500.25,'input')-timestamp(rows,100,'output')
         self.assertEqual(raw-ts,5504)
 
+    def test_maximum_buffer_and_partial_final_capture(self):
+        rows=[dict(raw=i*4096,frames=4096,input_sample=i*4096-1024,
+                   output_sample=i*4096+12288,input_flags=1,output_flags=1) for i in range(2)]
+        self.assertEqual(check_cycles(rows,8000),[])
+        self.assertEqual(timestamp(rows,5000,'input'),3976)
+        rows[0]['frames']=4097
+        self.assertIn('delivered_frame_gap',check_cycles(rows,8000))
+
     def test_reject_timestamp_and_raw_gaps(self):
         for key in ('raw','input_sample','output_sample'):
             rows=self.cycles();rows[2][key]+=1

@@ -27,11 +27,14 @@ int main(int argc,char **argv){
             if(previous.epoch && (z.epoch!=previous.epoch || z.frame<previous.frame || z.ticks<previous.ticks || (z.frame==previous.frame && z.ticks!=previous.ticks))){failure=11;break;}
             if(z.frame!=previous.frame)updates++;
             previous=z;
-            if(!cursor)cursor=z.frame+cfg.output_safety;
-            uint64_t end=z.frame+cfg.output_safety+1024;
+            ftu_live_status(h,&s);
+            /* ZTS is a stable clock pair, not a continuously moving cursor. */
+            uint64_t current=s.captured;
+            if(!cursor)cursor=current+cfg.output_safety;
+            uint64_t end=current+cfg.output_safety+1024;
             while(cursor<end){uint32_t n=(uint32_t)((end-cursor)>1024?1024:end-cursor);if(ftu_live_write(h,cursor,n,silence)){failure=12;break;}cursor+=n;writes+=n;}
             if(failure)break;
-            if(z.frame>cfg.input_safety){if(ftu_live_read(h,z.frame-cfg.input_safety,256,input)){failure=13;break;}for(unsigned i=0;i<256*8;i++)if(!isfinite(input[i]) || fabsf(input[i])>1){failure=14;break;}reads+=256;}
+            if(current>cfg.input_safety){if(ftu_live_read(h,current-cfg.input_safety,256,input)){failure=13;break;}for(unsigned i=0;i<256*8;i++)if(!isfinite(input[i]) || fabsf(input[i])>1){failure=14;break;}reads+=256;}
             ftu_live_status(h,&s);
             if(s.phase!=2){failure=15;break;}
             if(!baseline && now()-began>=1){baseline_missing=s.playback_missing;baseline=true;}

@@ -25,6 +25,7 @@
 #endif
 #define FTU_STATUS_PROPERTY 'ftuS'
 #define FTU_BUILD_PROPERTY 'ftuB'
+#define FTU_TIMING_PROPERTY 'ftuT'
 
 enum { kObjPlugIn = kAudioObjectPlugInObject, kObjDevice = 2, kObjInput = 3, kObjOutput = 4 };
 
@@ -156,7 +157,7 @@ typedef union {
     AudioBufferList abl;
     struct { AudioChannelLayoutTag mChannelLayoutTag; AudioChannelBitmap mChannelBitmap; UInt32 mNumberChannelDescriptions; AudioChannelDescription mChannelDescriptions[FTU_MAX_CHANNELS]; } layout;
     uint8_t raw[256];
-    AudioServerPlugInCustomPropertyInfo custom[2];
+    AudioServerPlugInCustomPropertyInfo custom[3];
 } prop_buf;
 
 /* elem != 0 marks arrays that may be truncated to the caller's buffer. */
@@ -261,10 +262,12 @@ static OSStatus device_prop(const AudioObjectPropertyAddress *a, UInt32 qsize, c
     bool io = in || out;
     switch (a->mSelector) {
     case FTU_BUILD_PROPERTY: return put_str(b, s, CFSTR(FTU_BUILD_ID));
+    case FTU_TIMING_PROPERTY:
     case FTU_STATUS_PROPERTY: return put_str(b, s, CFSTR("")); /* built in get_data */
     case kAudioObjectPropertyCustomPropertyInfoList:
         b->custom[0]=(AudioServerPlugInCustomPropertyInfo){FTU_STATUS_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         b->custom[1]=(AudioServerPlugInCustomPropertyInfo){FTU_BUILD_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[2]=(AudioServerPlugInCustomPropertyInfo){FTU_TIMING_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         s->size=sizeof b->custom;s->elem=sizeof b->custom[0];return 0;
     case kAudioObjectPropertyBaseClass: return put_u32(b, s, kAudioObjectClassID);
     case kAudioObjectPropertyClass: return put_u32(b, s, kAudioDeviceClassID);
@@ -433,7 +436,7 @@ static ULONG ftu_release(void *drv)
 
 static bool config_valid(const struct ftu_live_config *c)
 {
-    return c->channels == FTU_MAX_CHANNELS && c->rate == 48000 && c->period > 0 && c->min_buffer > 0 &&
+    return c->channels == FTU_MAX_CHANNELS && c->rate == 48000 && c->period >= 10923 && c->min_buffer > 0 &&
            c->min_buffer <= c->default_buffer && c->default_buffer <= c->max_buffer &&
            c->ring_frames >= c->max_buffer;
 }
@@ -564,6 +567,40 @@ static OSStatus ftu_get_size(AudioServerPlugInDriverRef drv, AudioObjectID obj, 
     return st;
 }
 
+/* Property/control path only: JSON allocation and formatting never run in IO. */
+static CFStringRef timing_text(struct ftu_live *live)
+{
+    static const char *names[FTU_TIMING_METRICS]={
+        "write_frames","write_capture_lead","write_preparation_lead",
+        "output_capture_lead","output_high_water_margin","output_missing",
+        "read_frames","read_capture_margin","read_missing",
+        "submit_check_lead_ms","submit_return_lead_ms","submit_clock_error"};
+    struct ftu_timing_snapshot t={0};ftu_live_timing(live,&t);
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppendFormat(text,NULL,CFSTR("{\"version\":%u,\"epoch\":%llu,\"valid\":%llu,\"steady_after\":%llu,\"limits\":["),
+        t.version,(unsigned long long)t.epoch,(unsigned long long)t.valid,(unsigned long long)t.steady_after);
+    for(unsigned i=0;i<FTU_TIMING_BUCKETS-1;i++)
+        CFStringAppendFormat(text,NULL,CFSTR("%s%lld"),i?",":"",(long long)t.limits[i]);
+    CFStringAppend(text,CFSTR("]"));
+    for(unsigned bank=0;bank<2;bank++){
+        CFStringAppendFormat(text,NULL,CFSTR(",\"%s\":{"),bank?"steady":"all");
+        for(unsigned i=0;i<FTU_TIMING_METRICS;i++){
+            const struct ftu_timing_metric *m=&t.metrics[bank][i];
+            CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":{\"valid\":%llu,\"count\":%llu,\"dropped\":%llu,"),
+                i?",":"",names[i],(unsigned long long)m->valid,(unsigned long long)m->count,(unsigned long long)m->dropped);
+            if(m->valid && m->count)
+                CFStringAppendFormat(text,NULL,CFSTR("\"min\":%lld,\"max\":%lld,\"last\":%lld,"),(long long)m->min,(long long)m->max,(long long)m->last);
+            else CFStringAppend(text,CFSTR("\"min\":null,\"max\":null,\"last\":null,"));
+            CFStringAppend(text,CFSTR("\"buckets\":["));
+            for(unsigned j=0;j<FTU_TIMING_BUCKETS;j++)
+                CFStringAppendFormat(text,NULL,CFSTR("%s%llu"),j?",":"",(unsigned long long)m->buckets[j]);
+            CFStringAppend(text,CFSTR("]}"));
+        }
+        CFStringAppend(text,CFSTR("}"));
+    }
+    CFStringAppend(text,CFSTR("}"));return text;
+}
+
 static OSStatus ftu_get_data(AudioServerPlugInDriverRef drv, AudioObjectID obj, pid_t pid,
                              const AudioObjectPropertyAddress *a, UInt32 qsize, const void *qdata,
                              UInt32 size, UInt32 *out_size, void *out)
@@ -583,6 +620,11 @@ static OSStatus ftu_get_data(AudioServerPlugInDriverRef drv, AudioObjectID obj, 
         n = size >= s.size ? s.size : size / s.elem * s.elem;
     else if (size < s.size)
         return kAudioHardwareBadPropertySizeError;
+    if (obj == kObjDevice && a->mSelector == FTU_TIMING_PROPERTY) {
+        CFStringRef text=timing_text(live_handle());
+        if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
     if (obj == kObjDevice && a->mSelector == FTU_STATUS_PROPERTY) {
         struct ftu_live_status st = {0};
         ftu_live_status(live_handle(), &st);

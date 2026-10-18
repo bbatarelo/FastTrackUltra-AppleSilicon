@@ -9,7 +9,7 @@
 //!   a wrapped slot can never be returned for the wrong frame.
 //! - `PublishedClock` publishes one `ClockAnchor` coherently to readers.
 //! - `TimestampStepper` turns measured clock observations into a zero
-//!   timestamp pair that only moves when the 512-frame boundary advances.
+//!   timestamp pair that only moves when the ZTS_PERIOD boundary advances.
 //!
 //! Policy:
 //! - Nothing here waits, spins or retries unboundedly. Readers make at most two
@@ -27,10 +27,9 @@
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
 
-pub const CHANNELS: usize = 8;
-pub const RING_FRAMES: usize = 16384;
-pub const ZTS_PERIOD: u64 = 512;
-pub const MAX_FRAMES_PER_CALL: usize = 1024;
+pub use crate::geometry::{
+    CHANNELS, MAX_BUFFER_FRAMES as MAX_FRAMES_PER_CALL, RING_FRAMES, ZTS_PERIOD,
+};
 
 const READ_ATTEMPTS: usize = 2;
 
@@ -105,7 +104,7 @@ impl Timeline {
 
     /// Publishes `samples.len() / CHANNELS` interleaved frames starting at
     /// absolute frame `first`. All-or-nothing: returns `false` without touching
-    /// the ring for an invalid length (empty, partial frame, > 1024 frames),
+    /// the ring for an invalid length (empty, partial frame, > MAX_FRAMES_PER_CALL frames),
     /// frame overflow, a competing writer, a late write that would clobber a
     /// newer frame in the same slot, or version exhaustion.
     pub fn write(&self, first: u64, samples: &[f32]) -> bool {
@@ -142,6 +141,11 @@ impl Timeline {
         }
         self.head.store(head.max(end), SeqCst);
         true
+    }
+
+    /// Observation only: newest published end, not proof of contiguous coverage.
+    pub fn high_water(&self) -> u64 {
+        self.head.load(SeqCst)
     }
 
     /// Copies frames starting at `first` into `samples` and returns the number
@@ -338,7 +342,7 @@ pub struct ZeroTimestamp {
 /// Each observation is the cumulative captured frame count before a USB group
 /// plus that group's final processing timestamp, with `ticks_per_frame` from
 /// a mature measured fit (the caller must not feed nominal or callback-arrival
-/// values). The boundary `frame / 512 * 512` is projected back by
+/// values). The boundary `frame / ZTS_PERIOD * ZTS_PERIOD` is projected back by
 /// `ticks_per_frame`; a new pair is published only when the boundary strictly
 /// advances, so the pair is stable within each period. Foreign epochs are
 /// rejected without touching state; any other error latches the stepper
@@ -812,7 +816,7 @@ mod tests {
                 ticks: base
             }
         );
-        for k in 1..=10u64 {
+        for k in 1..ZTS_PERIOD.div_ceil(48) {
             assert_eq!(
                 s.advance(obs(k * 48, base + k * 24_000 + 7, 500.0)),
                 Ok(None)
@@ -820,15 +824,15 @@ mod tests {
             assert_eq!(s.current(), Some(first));
         }
         let next = s
-            .advance(obs(528, base + 528 * 500, 500.0))
+            .advance(obs(ZTS_PERIOD + 16, base + (ZTS_PERIOD + 16) * 500, 500.0))
             .unwrap()
             .unwrap();
         assert_eq!(
             next,
             ZeroTimestamp {
                 epoch: 1,
-                frame: 512,
-                ticks: base + 512 * 500
+                frame: ZTS_PERIOD,
+                ticks: base + ZTS_PERIOD * 500
             }
         );
     }
@@ -839,7 +843,8 @@ mod tests {
         let base = 6_490_423_617_548u64;
         let mut lcg: u64 = 0x1234_5678_9abc_def0;
         let mut published = Vec::new();
-        for i in 0..400u64 {
+        let observations = ZTS_PERIOD * 20 / 48;
+        for i in 0..observations {
             lcg = lcg
                 .wrapping_mul(6364136223846793005)
                 .wrapping_add(1442695040888963407);
@@ -853,12 +858,15 @@ mod tests {
                 published.push(z);
             }
         }
-        assert_eq!(published.len() as u64, 399 * 48 / 512 + 1);
+        assert_eq!(
+            published.len() as u64,
+            (observations - 1) * 48 / ZTS_PERIOD + 1
+        );
         for (k, z) in published.iter().enumerate() {
-            assert_eq!(z.frame, k as u64 * 512);
+            assert_eq!(z.frame, k as u64 * ZTS_PERIOD);
             let ideal = base + 1000 + z.frame * 500;
             assert!(
-                z.ticks.abs_diff(ideal) <= 12,
+                z.ticks.abs_diff(ideal) <= (ZTS_PERIOD as f64 * 0.01).ceil() as u64 + 8,
                 "boundary {} off by {}",
                 z.frame,
                 z.ticks.abs_diff(ideal)
@@ -877,13 +885,15 @@ mod tests {
                 .frame,
             0
         );
-        let z = s.advance(obs(2000, 2_000_000, 500.0)).unwrap().unwrap();
+        let frame = 3 * ZTS_PERIOD + 464;
+        let ticks = 1_000_000 + frame * 500;
+        let z = s.advance(obs(frame, ticks, 500.0)).unwrap().unwrap();
         assert_eq!(
             z,
             ZeroTimestamp {
                 epoch: 1,
-                frame: 1536,
-                ticks: 2_000_000 - 464 * 500
+                frame: 3 * ZTS_PERIOD,
+                ticks: ticks - 464 * 500
             }
         );
     }
@@ -970,13 +980,21 @@ mod tests {
         );
         assert_latched(&mut s);
 
-        // Boundary 0 at 750_000; projecting 512 back with a steep slope lands
-        // before it.
+        // Projecting the next boundary with a steep slope lands before the
+        // previous pair, even though the observations themselves advance.
         let mut s = TimestampStepper::new(1);
-        let z = s.advance(obs(500, 1_000_000, 500.0)).unwrap().unwrap();
-        assert_eq!(z.ticks, 750_000);
+        let ticks = ZTS_PERIOD * 500 + 1_000_000;
+        let z = s
+            .advance(obs(ZTS_PERIOD - 12, ticks, 500.0))
+            .unwrap()
+            .unwrap();
+        assert_eq!(z.ticks, 1_006_000);
         assert_eq!(
-            s.advance(obs(520, 1_000_001, 100_000.0)),
+            s.advance(obs(
+                ZTS_PERIOD + 8,
+                ticks + 1,
+                ZTS_PERIOD as f64 * 500.0 / 8.0
+            )),
             Err(ERR_BOUNDARY_ORDER)
         );
         assert_latched(&mut s);

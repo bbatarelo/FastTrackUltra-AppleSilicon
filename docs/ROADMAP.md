@@ -7,16 +7,33 @@ protocol/timing/ownership policy, and thin native macOS boundaries.
 
 ## 1. Timing and monitoring latency
 
-Current raw round trip is 110.54/113.21/115.87 ms at actual 64/128/192-frame
-buffers. Input/output safety offsets total 5120 frames. The roughly 1.206 ms
-timestamp remainder excludes scheduling distance and is not monitoring latency.
+Current raw round trip is 89.206 ms at actual 64-frame buffers, down from
+110.539 ms after reducing output safety from 4096 to 3072 frames. Input safety
+remains 1024. The roughly 1.206 ms timestamp remainder excludes scheduling
+distance and is not monitoring latency.
 
-- Model queue lead, payload availability, ownership and capture publication.
-  Measure the ranges HAL writes versus transport deadlines before reducing
-  margins or experimenting with direct payload binding.
-- Resolve the 512-frame zero-timestamp period and host-visible 15–192 range.
-  Check SDK requirements and buffer capacity together; earlier 1024-frame
-  requests succeeded but were coerced to 192.
+The [geometry build](TIMING-GEOMETRY.md) fixed timestamp-period/capacity
+consistency and demonstrated actual 64–4096-frame callbacks. The subsequent
+[observation and safety experiment](TIMING-OBSERVATION.md) measured spare
+publication/preparation margin, then confirmed a 21.333 ms raw improvement at
+64 frames with zero steady misses. The current 4096-frame raw round trip is
+257.206 ms. Short hardware sweeps, silent two-client scenarios and the owner's 18 October
+listening check passed; monitoring latency is still high.
+
+- Use the preserved `dev-2820c37b9ed14d39` checkpoint for future comparisons.
+  Repeat application playback/recording and longer sessions before making
+  broader stability claims.
+- Extend the explicit availability screen into phase/stall and application-
+  transition coverage before another safety reduction. Characterize smaller USB
+  batches/queue depth and capture-publication cadence as separate candidates;
+  retain captured packet-count replay and immutable payload ownership.
+  The current disturbance budget does not support removing another 1024 output
+  frames without changing its assumptions. Keep actual missing samples separate
+  from high-water margins, and measure capture constraints before changing input
+  safety or experimenting with direct payload binding.
+- Retain geometry/read-back regressions: the 16384-frame period now permits
+  actual 4096-frame callbacks on this Mac. Extend qualification to other hosts
+  and investigate the external minimum of 15 versus the declared 64.
 - Trace play/stop/record/seek transitions continuously to explain the observed
   128-frame GarageBand output-miss increase between sampled phases.
 - Repeat raw/timestamp loopback across actual buffers and independent starts.
@@ -87,9 +104,10 @@ hardware is required; matching its product ID is not a hardware pass.
 
 ## 6. Installation and releases
 
-Verify the shared install/update/remove and package paths on a live system and
-a fresh Mac, preserving rollback and loaded-build checks. Repeat the basic
-hardware baseline from this repository before calling a new build qualified.
+The shared install/update helper has now deployed both the unchanged contributor
+baseline and timing candidate with backup and loaded-build verification. Still
+verify removal, `.pkg` installation and fresh-Mac setup on live systems. Retain
+rollback and repeat the hardware baseline for each new build.
 Then prepare signed/notarized distribution and clear nontechnical instructions.
 Intel support remains separate work requiring builds and test hardware.
 

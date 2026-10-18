@@ -45,8 +45,14 @@ not end a session still owned by another client.
 Sample frames, host ticks, stream epochs and timestamp validity are distinct.
 USB scheduling frames are not a direct reading of the device audio crystal.
 A stable zero-timestamp boundary must return the same sample/host pair; advancing
-time and resets need explicit semantics. Current timestamp-period/buffer limits
-and large safety offsets require the next timing review.
+time and resets need explicit semantics. The Rust geometry module defines
+timestamp period, HAL call capacity, safety offsets and ring size together. Playback-write admission follows the capture
+cursor rather than the held zero timestamp. The [measured geometry build](TIMING-GEOMETRY.md)
+passed short physical loopback at actual 64–4096-frame callbacks on the desktop
+Ultra. A subsequent [observation sweep](TIMING-OBSERVATION.md) measured publication,
+preparation and capture margins. The output-safety reduction to 3072 then passed the same short loopback sweep,
+measuring a 21.333 ms improvement at 64 frames. Wider hardware and application
+qualification is still required.
 
 ## Configuration and controls
 

@@ -38,6 +38,27 @@ int main(void) {
     loop_io(0,NULL,&ib,&it,&ob,&ot,&s);
     assert(capture[0]==in[3] && capture[1]==in[11]);
     assert(out[2]==plan[0] && out[3]==0 && out[10]==plan[1] && out[11]==0);
+    /* Maximum host buffer, partial final buffer, and above-capacity refusal. */
+    float *large_in=calloc(4097*8,sizeof(float)),*large_out=calloc(4097*8,sizeof(float));
+    float *large_plan=calloc(4096,sizeof(float)),*large_capture=calloc(4096,sizeof(float));
+    assert(large_in && large_out && large_plan && large_capture);
+    large_plan[4095]=0.005f;large_in[4095*8+3]=0.02f;
+    ib.mBuffers[0]=(AudioBuffer){8,4096*8*sizeof(float),large_in};
+    ob.mBuffers[0]=(AudioBuffer){8,4096*8*sizeof(float),large_out};
+    s=(struct loop){.plan=large_plan,.capture=large_capture,.capacity=4096,.cycles=cycles,.input_channel=3};
+    loop_io(0,NULL,&ib,&it,&ob,&ot,&s);
+    assert(!atomic_load(&s.error) && atomic_load(&s.done) && s.position==4096);
+    assert(large_out[4095*8+2]==large_plan[4095] && large_capture[4095]==0.02f);
+    for(unsigned i=0;i<4096*8;i++) if(i!=4095*8+2) assert(large_out[i]==0);
+    s=(struct loop){.plan=large_plan,.capture=large_capture,.capacity=3,.cycles=cycles,.input_channel=3};
+    loop_io(0,NULL,&ib,&it,&ob,&ot,&s);
+    assert(!atomic_load(&s.error) && atomic_load(&s.done) && s.position==3);
+    s=(struct loop){.plan=large_plan,.capture=large_capture,.capacity=4096,.cycles=cycles,.input_channel=3};
+    ib.mBuffers[0].mDataByteSize=ob.mBuffers[0].mDataByteSize=4097*8*sizeof(float);
+    loop_io(0,NULL,&ib,&it,&ob,&ot,&s);
+    assert(atomic_load(&s.error)==2 && s.position==0);
+    for(unsigned i=0;i<4097*8;i++) assert(large_out[i]==0);
+    free(large_in);free(large_out);free(large_plan);free(large_capture);
     puts("callback channel routing, gap silence, level cutoff and finite stop: PASS");
     return 0;
 }

@@ -29,16 +29,22 @@ playback of 44.1 kHz and GarageBand recording to 44.1 kHz demonstrate applicatio
 conversion only. Desktop-Ultra outputs 1/2 were heard cleanly; output 3 → input 4
 was measured. No all-channel or Ultra 8R pass follows from those results.
 
-The external HAL reports a 15–192-frame buffer range although plug-in source
-declares 64–1024. Actual 64/128/192 callbacks passed short loopback sessions.
+The measured baseline HAL reported a 15–192-frame buffer range although its
+plug-in source declared 64–1024. Actual 64/128/192 callbacks passed short loopback sessions.
 1024 requests returned success but read back 192. E-MU's empirical
 `min(4096, ZeroTimeStampPeriod * 3/8)` cap predicts 192 from FTU's period of 512;
 this is an explanation to verify, not an API guarantee. The local SDK documents
-a minimum zero-timestamp period of 10923. Review that period, the published clock
-and maximum supported buffer capacity together.
+a minimum zero-timestamp period of 10923. The [new geometry candidate](TIMING-GEOMETRY.md)
+confirmed external period 16384 and range 15–4096 on this Mac, with two accepted
+physical-loopback starts at every planned size from 64 through 4096. The lower
+external minimum is still unqualified. Review the period, published clock,
+maximum call size and ring capacity together; a successful set request alone
+is insufficient.
 
-Input/output safety offsets are 1024/4096 frames. Raw loopback was approximately
-111–116 ms while timestamp RTL was 1.206 ms. Their paired difference was exactly
+The earlier measured builds use input/output safety offsets of 1024/4096
+frames. The [1024/3072 experiment](TIMING-OBSERVATION.md) now measures 89.206 ms
+raw RTL at 64 frames, down from 110.539 ms, with no steady losses in its short
+physical sweep. Timestamp RTL remains about 1.206 ms. Their paired difference is
 `2 * buffer + safety_in + safety_out`. See
 [the measurement definitions](../tools/hal-loopback/README.md). These values
 are the FTU baseline, not constants to copy to E-MU or other devices.

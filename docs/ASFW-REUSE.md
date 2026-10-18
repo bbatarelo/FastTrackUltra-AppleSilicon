@@ -84,12 +84,48 @@ instrumentation task. These are useful methods to evaluate in E-MU, not evidence
 that E-MU has the same defects.
 
 The read-back-first method already exposed a useful discrepancy: FTU's source
-declares a 64–1024 buffer range, while this Mac's external HAL reports **15–192**.
+originally declared a 64–1024 range, while this Mac's external HAL reported
+**15–192**.
 The E-MU project's documented timestamp-period cap predicts 192 from FTU's
 512-frame period. This supports keeping host-visible geometry in diagnostics
 and the eventual companion app, rather than displaying only driver constants.
 See [the qualification findings](LOOPBACK-QUALIFICATION.md). No ASFW source was
 copied and no E-MU files were changed.
+
+## Single configuration applied to the next candidate
+
+The [measured timing candidate](TIMING-GEOMETRY.md) puts HAL limits, timestamp
+period, ring capacity and admission bounds in one Rust geometry module with
+capacity assertions and maximum-buffer regressions. This applies the
+`ResolvedTimingGeometry` method to AudioServerPlugIn. Diagnostics retain external
+read-back errors and actual callbacks because source constants alone did not
+predict the original host range. Hardware now confirms a 16384-frame timestamp
+period, a 4096-frame ceiling, and actual callbacks through that size. The host
+selected 512 after installation despite the source default of 256: another
+reason to show measured values in a future diagnostic app.
+
+The same strict trial rejection caught a Chrome client overlapping an isolated
+measurement; logs identified the shared session, and a fresh repeat passed.
+A one-sample difference between 1024-frame starts remains in the reported range.
+These are concrete benefits of retaining rejected attempts and restart spread.
+The measured [observation build](TIMING-OBSERVATION.md) separates publication and
+preparation margins, actual missing PCM, and submission lead separately. Its
+regression with a positive high-water margin but a missing payload makes the
+ownership distinction concrete. Thirteen physical runs now retain minima across
+independent starts, count actual misses, and separate startup from the steady
+bank. A counterfactual shift with an explicit callback/block disturbance budget
+selected a smaller output-safety step for hardware testing. The subsequent
+physical sweep measured the predicted 21.333 ms reduction at 64 frames, with
+zero steady misses and 23–24 ms post-submit lead. Keeping reference planes and
+actual payload loss separate made that comparison reviewable; it did not
+require copying any FireWire timing constant.
+
+For a later E-MU review, the reusable pieces are: publish queue/copy boundaries
+explicitly; record signed lead and capture availability alongside actual missing
+samples; retain coherent final epoch snapshots; and state a disturbance budget
+separately from measured extrema. The FTU USB constants and the resulting
+3072-frame experiment are not E-MU recommendations. These observations do not
+establish an E-MU defect or backport need.
 
 ## Boundaries on reuse
 

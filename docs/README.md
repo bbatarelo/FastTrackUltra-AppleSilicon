@@ -7,6 +7,8 @@
 | [Roadmap](ROADMAP.md) | Choosing implementation work, including MIDI/DSP/the companion app |
 | [Contributing](../CONTRIBUTING.md) | Running tests, reporting issues or proposing changes |
 | [Architecture](ARCHITECTURE.md) | Understanding Rust, native APIs, timing and ownership |
+| [Timing geometry candidate](TIMING-GEOMETRY.md) | Reviewing the buffer/timestamp change, measured sweep and remaining latency work |
+| [Timing observations](TIMING-OBSERVATION.md) | Understanding playback/capture margins and the next latency experiment |
 | [Findings](FINDINGS.md) | Looking up measured protocol and HAL behavior |
 | [GarageBand and loopback](LOOPBACK-QUALIFICATION.md) | Reading the reproducible 48 kHz hardware baseline |
 | [ASFireWire lessons](ASFW-REUSE.md) | Evaluating timing, ownership and measurement methods |

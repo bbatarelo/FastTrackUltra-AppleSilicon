@@ -1,7 +1,17 @@
 //! Long-lived session: control calls own lifecycle; realtime calls only touch
 //! fixed atomic timelines. USB and callbacks remain on one dedicated thread.
 use crate::{
-    clock::ClockSnapshot, native::*, pool::*, scheduler::*, timeline::*, PENDING_OWNERSHIP,
+    clock::ClockSnapshot,
+    geometry::{
+        playback_window, DEFAULT_BUFFER_FRAMES, INPUT_SAFETY, MIN_BUFFER_FRAMES, OUTPUT_SAFETY,
+        PLAYBACK_OFFSET, RATE, USB_BLOCK_MAX_FRAMES,
+    },
+    native::*,
+    pool::*,
+    scheduler::*,
+    timeline::*,
+    timing::{distance, Metric, Snapshot as TimingSnapshot, Timing},
+    PENDING_OWNERSHIP,
 };
 use std::{
     ffi::c_void,
@@ -19,10 +29,7 @@ const STOPPING: u32 = 3;
 const FAULT: u32 = 4;
 const QUARANTINED: u32 = 5;
 const EPOCH_FRAMES: u64 = 1 << 40;
-const OUTPUT_OFFSET: u64 = 3072;
-const _: () =
-    assert!(ENTRIES * 13 <= 1024 && BLOCK_BYTES == ENTRIES * 312 && ENTRIES.is_multiple_of(8));
-const _: () = assert!(RING_FRAMES >= 4096 + 1024 + OUTPUT_OFFSET as usize + ZTS_PERIOD as usize);
+const _: () = assert!(BLOCK_BYTES == ENTRIES * 312 && ENTRIES.is_multiple_of(8));
 #[repr(C)]
 pub struct ThreadSchedule {
     pub period_ns: u32,
@@ -86,11 +93,13 @@ struct Shared {
     stop: AtomicBool,
     epoch: AtomicU64,
     calls: AtomicUsize,
+    timing: Timing,
     capture: Timeline,
     playback: Timeline,
     clock: PublishedClock,
     captured: AtomicU64,
     prepared: AtomicU64,
+    playback_requested_end: AtomicU64,
     playback_missing: AtomicU64,
     capture_missing: AtomicU64,
     submitted: [AtomicU64; 2],
@@ -110,11 +119,13 @@ impl Shared {
             stop: AtomicBool::new(false),
             epoch: AtomicU64::new(0),
             calls: AtomicUsize::new(0),
+            timing: Timing::new(),
             capture: Timeline::new(),
             playback: Timeline::new(),
             clock: PublishedClock::new(),
             captured: AtomicU64::new(0),
             prepared: AtomicU64::new(0),
+            playback_requested_end: AtomicU64::new(0),
             playback_missing: AtomicU64::new(0),
             capture_missing: AtomicU64::new(0),
             submitted: std::array::from_fn(|_| AtomicU64::new(0)),
@@ -145,11 +156,13 @@ impl Shared {
     }
     fn reset(&self, epoch: u64) {
         self.clock.publish(None);
+        self.timing.reset(epoch);
         self.epoch.store(epoch, SeqCst);
         self.stop.store(false, SeqCst);
         for a in [
             &self.captured,
             &self.prepared,
+            &self.playback_requested_end,
             &self.playback_missing,
             &self.capture_missing,
         ]
@@ -226,11 +239,35 @@ impl AudioIo {
             stepper: TimestampStepper::new(epoch),
             input: vec![0; FEEDBACK_SLOTS * BLOCK_BYTES],
             tags: [None; FEEDBACK_SLOTS],
-            scratch: vec![0.; 1024 * 8],
+            scratch: vec![0.; USB_BLOCK_MAX_FRAMES * CHANNELS],
         }
     }
 }
 impl StreamIo for AudioIo {
+    fn submission_timing(&self) -> bool {
+        true
+    }
+    fn submitted(&mut self, start: u64, checked: u64, returned: Option<u64>) {
+        let captured = self.shared.captured.load(SeqCst);
+        let timing = &self.shared.timing;
+        timing.observe(
+            Metric::SubmitCheckLeadMs,
+            distance(start, checked),
+            captured,
+        );
+        timing.observe(
+            Metric::SubmitClockError,
+            i64::from(returned.is_none()),
+            captured,
+        );
+        if let Some(returned) = returned {
+            timing.observe(
+                Metric::SubmitReturnLeadMs,
+                distance(start, returned),
+                captured,
+            );
+        }
+    }
     fn progress(&mut self, submitted: [usize; 2], completed: [usize; 2], pending: [usize; 2]) {
         for d in 0..2 {
             self.shared.submitted[d].store(submitted[d] as u64, SeqCst);
@@ -308,15 +345,39 @@ impl StreamIo for AudioIo {
     }
     fn output(&mut self, first: u64, frames: usize, bytes: &mut [u8]) -> Result<(), &'static str> {
         let position = first
-            .checked_add(OUTPUT_OFFSET)
+            .checked_add(PLAYBACK_OFFSET)
             .ok_or("timeline_exhausted")?;
         if position + frames as u64 >= EPOCH_FRAMES {
             return Err("timeline_exhausted");
         }
+        // Publish the full requested interval before its first sample is read.
+        // HAL observation includes preparation in progress, not only blocks
+        // whose packing has finished. This never gates or changes playback.
+        self.shared
+            .playback_requested_end
+            .store(position + frames as u64, SeqCst);
+        let captured = self.shared.captured.load(SeqCst);
+        let head = self
+            .shared
+            .playback
+            .high_water()
+            .saturating_sub(self.offset);
+        let timing = &self.shared.timing;
+        timing.observe(
+            Metric::OutputCaptureLead,
+            distance(position, captured),
+            captured,
+        );
+        timing.observe(
+            Metric::OutputHighWaterMargin,
+            distance(head, position + frames as u64),
+            captured,
+        );
         let missing = self
             .shared
             .playback
             .read(self.offset + position, &mut self.scratch[..frames * 8]);
+        timing.observe(Metric::OutputMissing, missing as i64, captured);
         if self.shared.phase.load(SeqCst) == RUNNING {
             self.shared
                 .playback_missing
@@ -543,15 +604,15 @@ fn finish(shared: &Shared, control: &mut Control) -> bool {
 pub unsafe extern "C" fn ftu_live_configuration(out: *mut Configuration) {
     if let Some(out) = out.as_mut() {
         *out = Configuration {
-            channels: 8,
-            rate: 48000,
+            channels: CHANNELS as u32,
+            rate: RATE,
             period: ZTS_PERIOD as u32,
-            min_buffer: 64,
-            max_buffer: 1024,
-            default_buffer: 256,
-            input_safety: 1024,
-            output_safety: 4096,
-            playback_offset: OUTPUT_OFFSET as u32,
+            min_buffer: MIN_BUFFER_FRAMES,
+            max_buffer: MAX_FRAMES_PER_CALL as u32,
+            default_buffer: DEFAULT_BUFFER_FRAMES,
+            input_safety: INPUT_SAFETY,
+            output_safety: OUTPUT_SAFETY,
+            playback_offset: PLAYBACK_OFFSET as u32,
             ring_frames: RING_FRAMES as u32,
         };
     }
@@ -693,7 +754,8 @@ pub unsafe extern "C" fn ftu_live_write(
     frames: u32,
     data: *const f32,
 ) -> i32 {
-    if frames > 1024
+    if frames == 0
+        || frames as usize > MAX_FRAMES_PER_CALL
         || data.is_null()
         || first
             .checked_add(u64::from(frames))
@@ -710,16 +772,30 @@ pub unsafe extern "C" fn ftu_live_write(
     let Some(anchor) = h.shared.clock.read() else {
         return -2;
     };
-    if anchor.epoch != call.epoch
-        || first < anchor.frame.saturating_sub(1024)
-        || first + u64::from(frames) > anchor.frame + (RING_FRAMES / 2) as u64
-    {
+    // ZTS is deliberately held stable within a long period. Capture publication
+    // advances every completed USB batch and is the admission reference instead.
+    let captured = h.shared.captured.load(SeqCst);
+    if anchor.epoch != call.epoch || !playback_window(first, frames, captured) {
         return -3;
     }
     if h.shared.playback.write(
         call.epoch * EPOCH_FRAMES + first,
         std::slice::from_raw_parts(data, frames as usize * 8),
     ) {
+        let captured = h.shared.captured.load(SeqCst);
+        let prepared = h.shared.playback_requested_end.load(SeqCst);
+        let timing = &h.shared.timing;
+        timing.observe(Metric::WriteFrames, i64::from(frames), captured);
+        timing.observe(
+            Metric::WriteCaptureLead,
+            distance(first, captured),
+            captured,
+        );
+        timing.observe(
+            Metric::WritePreparationLead,
+            distance(first, prepared),
+            captured,
+        );
         0
     } else {
         -3
@@ -732,7 +808,8 @@ pub unsafe extern "C" fn ftu_live_read(
     frames: u32,
     data: *mut f32,
 ) -> i32 {
-    if frames > 1024
+    if frames == 0
+        || frames as usize > MAX_FRAMES_PER_CALL
         || data.is_null()
         || first
             .checked_add(u64::from(frames))
@@ -748,11 +825,20 @@ pub unsafe extern "C" fn ftu_live_read(
     let Some(call) = h.shared.enter() else {
         return -2;
     };
+    let captured = h.shared.captured.load(SeqCst);
+    let timing = &h.shared.timing;
+    timing.observe(Metric::ReadFrames, i64::from(frames), captured);
+    timing.observe(
+        Metric::ReadCaptureMargin,
+        distance(captured, first + u64::from(frames)),
+        captured,
+    );
     let missing = h
         .shared
         .capture
         .read(call.epoch * EPOCH_FRAMES + first, output);
     h.shared.capture_missing.fetch_add(missing as u64, SeqCst);
+    timing.observe(Metric::ReadMissing, missing as i64, captured);
     0
 }
 #[no_mangle]
@@ -785,6 +871,12 @@ pub unsafe extern "C" fn ftu_live_status(handle: *mut Live, out: *mut Status) {
     };
 }
 #[no_mangle]
+pub unsafe extern "C" fn ftu_live_timing(handle: *mut Live, out: *mut TimingSnapshot) {
+    if let (Some(h), Some(out)) = (handle.as_ref(), out.as_mut()) {
+        *out = h.shared.timing.snapshot();
+    }
+}
+#[no_mangle]
 pub unsafe extern "C" fn ftu_live_destroy(handle: *mut Live) -> i32 {
     let Some(h) = handle.as_ref() else {
         return -1;
@@ -808,6 +900,179 @@ pub unsafe extern "C" fn ftu_live_destroy(handle: *mut Live) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    unsafe extern "C" fn unused_open(_: u32, _: u32) -> *mut c_void {
+        std::ptr::null_mut()
+    }
+    unsafe extern "C" fn unused_ops(_: *mut c_void) -> *const PoolOps {
+        std::ptr::null()
+    }
+    unsafe extern "C" fn unused_close(_: *mut c_void) -> i32 {
+        0
+    }
+    unsafe extern "C" fn unused_schedule(_: *mut c_void, _: *const ThreadSchedule) -> i32 {
+        0
+    }
+
+    #[test]
+    fn full_size_io_uses_capture_progress_between_stable_zero_timestamps() {
+        let shared = Arc::new(Shared::new());
+        shared.reset(1);
+        shared.clock.publish(Some(ClockAnchor {
+            epoch: 1,
+            frame: 0,
+            ticks: 1_000_000,
+            ticks_per_frame: 500.0,
+        }));
+        shared.set_phase(RUNNING);
+        let mut live = Live {
+            shared: shared.clone(),
+            control: Mutex::new(Control {
+                worker: None,
+                clients: Vec::new(),
+            }),
+            factory: Factory {
+                open: unused_open,
+                ops: unused_ops,
+                close: unused_close,
+                configure_thread: unused_schedule,
+            },
+            product: 0x2080,
+            location: 123,
+        };
+        let samples = vec![0.25; MAX_FRAMES_PER_CALL * CHANNELS];
+        let mut readback = vec![0.; samples.len()];
+        for captured in [
+            MAX_FRAMES_PER_CALL as u64,
+            ZTS_PERIOD - 48,
+            2 * ZTS_PERIOD - 1,
+        ] {
+            shared.captured.store(captured, SeqCst);
+            let first = captured + u64::from(OUTPUT_SAFETY);
+            unsafe {
+                assert_eq!(
+                    ftu_live_write(
+                        &mut live,
+                        first,
+                        MAX_FRAMES_PER_CALL as u32,
+                        samples.as_ptr()
+                    ),
+                    0
+                );
+                assert_eq!(
+                    ftu_live_write(
+                        &mut live,
+                        first,
+                        MAX_FRAMES_PER_CALL as u32 + 1,
+                        samples.as_ptr()
+                    ),
+                    -1
+                );
+                assert_eq!(ftu_live_write(&mut live, first, 0, samples.as_ptr()), -1);
+                assert_eq!(
+                    ftu_live_write(
+                        &mut live,
+                        captured + crate::geometry::WRITE_AHEAD_FRAMES,
+                        1,
+                        samples.as_ptr()
+                    ),
+                    -3
+                );
+            }
+            assert_eq!(shared.playback.read(EPOCH_FRAMES + first, &mut readback), 0);
+            assert_eq!(readback, samples);
+            let input_first = captured - MAX_FRAMES_PER_CALL as u64;
+            assert!(shared.capture.write(EPOCH_FRAMES + input_first, &samples));
+            unsafe {
+                assert_eq!(
+                    ftu_live_read(
+                        &mut live,
+                        input_first,
+                        MAX_FRAMES_PER_CALL as u32,
+                        readback.as_mut_ptr()
+                    ),
+                    0
+                );
+                assert_eq!(
+                    ftu_live_read(
+                        &mut live,
+                        input_first,
+                        MAX_FRAMES_PER_CALL as u32 + 1,
+                        readback.as_mut_ptr()
+                    ),
+                    -1
+                );
+                assert_eq!(
+                    ftu_live_read(&mut live, input_first, 0, readback.as_mut_ptr()),
+                    -1
+                );
+            }
+            assert_eq!(readback, samples);
+            assert_eq!(shared.clock.read().unwrap().frame, 0);
+        }
+        let snapshot = shared.timing.snapshot();
+        assert_eq!(snapshot.metrics[0][Metric::WriteFrames as usize].count, 3);
+        assert_eq!(
+            snapshot.metrics[0][Metric::WriteCaptureLead as usize].min,
+            i64::from(OUTPUT_SAFETY)
+        );
+        assert_eq!(
+            snapshot.metrics[0][Metric::ReadCaptureMargin as usize].max,
+            0
+        );
+        assert_eq!(snapshot.metrics[0][Metric::ReadMissing as usize].max, 0);
+        assert_eq!(snapshot.metrics[1][Metric::WriteFrames as usize].count, 0);
+        // A clock belonging to another epoch still prevents write admission.
+        shared.epoch.store(2, SeqCst);
+        unsafe {
+            assert_eq!(
+                ftu_live_write(&mut live, 2 * ZTS_PERIOD, 1, samples.as_ptr()),
+                -3
+            );
+        }
+    }
+
+    #[test]
+    fn positive_high_water_is_not_mistaken_for_complete_payload_coverage() {
+        let shared = Arc::new(Shared::new());
+        shared.reset(1);
+        shared.set_phase(RUNNING);
+        shared.captured.store(50_000, SeqCst);
+        let mut io = AudioIo::new(shared.clone(), 1, Info::default());
+        let position = 50_000 + PLAYBACK_OFFSET;
+        let tail = vec![0.25; 64 * 8];
+        assert!(shared.playback.write(EPOCH_FRAMES + position + 64, &tail));
+        let mut bytes = vec![0xff; 64 * 24];
+        io.output(50_000, 64, &mut bytes).unwrap();
+        assert!(bytes.iter().all(|&x| x == 0));
+        let snapshot = shared.timing.snapshot();
+        assert_eq!(
+            snapshot.metrics[1][Metric::OutputHighWaterMargin as usize].min,
+            64
+        );
+        assert_eq!(snapshot.metrics[1][Metric::OutputMissing as usize].max, 64);
+        assert_eq!(
+            snapshot.metrics[1][Metric::OutputCaptureLead as usize].min,
+            PLAYBACK_OFFSET as i64
+        );
+        assert!(shared.playback.write(EPOCH_FRAMES + position, &tail));
+        io.output(50_000, 64, &mut bytes).unwrap();
+        assert!(bytes
+            .chunks_exact(3)
+            .all(|b| ftu_protocol::decode_s24(b.try_into().unwrap()) == 2_097_152));
+        io.submitted(100, 75, Some(77));
+        io.submitted(100, 75, None);
+        let snapshot = shared.timing.snapshot();
+        assert_eq!(
+            snapshot.metrics[1][Metric::SubmitReturnLeadMs as usize].min,
+            23
+        );
+        assert_eq!(
+            snapshot.metrics[1][Metric::SubmitClockError as usize].max,
+            1
+        );
+        assert_eq!(snapshot.metrics[1][Metric::OutputMissing as usize].min, 0);
+    }
+
     #[test]
     fn worker_panic_invalidates_clock_without_terminating_host() {
         let shared = Arc::new(Shared::new());

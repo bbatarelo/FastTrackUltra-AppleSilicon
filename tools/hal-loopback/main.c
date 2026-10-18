@@ -45,7 +45,7 @@ static OSStatus loop_io(AudioDeviceID device, const AudioTimeStamp *now,
         input->mBuffers[0].mDataByteSize!=output->mBuffers[0].mDataByteSize ||
         input->mBuffers[0].mDataByteSize%32) { atomic_store(&s->error,1); return noErr; }
     UInt32 n=output->mBuffers[0].mDataByteSize/32;
-    if (!n || n>1024 || s->cycle_count>=MAX_CALLBACKS) { atomic_store(&s->error,2); return noErr; }
+    if (!n || n>4096 || s->cycle_count>=MAX_CALLBACKS) { atomic_store(&s->error,2); return noErr; }
     if (!it || !ot || !(it->mFlags&kAudioTimeStampSampleTimeValid) ||
         !(ot->mFlags&kAudioTimeStampSampleTimeValid) || !isfinite(it->mSampleTime) ||
         !isfinite(ot->mSampleTime)) { atomic_store(&s->error,3); return noErr; }
@@ -131,7 +131,7 @@ int main(int argc,char **argv) {
             input_channel=(unsigned)(argv[i][0]-'1'); input_selected=true;
         } else {
             char *end; unsigned long n=strtoul(argv[i],&end,10);
-            if(requested || !*argv[i] || *end || n<64 || n>1024) return 2; requested=(UInt32)n;
+            if(requested || !*argv[i] || *end || n<64 || n>4096) return 2; requested=(UInt32)n;
         }
     }
     char path[4096]; if (snprintf(path,sizeof path,"%s/stimulus.f32",argv[1])>=(int)sizeof path) return 2;
@@ -149,6 +149,9 @@ int main(int argc,char **argv) {
     }
     printf("stimulus: %s, output=3 input=%u other_outputs=zero\n",s.silence_only?"digital_silence":"bounded_precomputed",input_channel+1);
     AudioDeviceID dev=find_device(); if(!dev || !describe(dev)) return 1; declarations(dev);
+    AudioObjectPropertyAddress timing_property={'ftuT',kAudioObjectPropertyScopeGlobal,0};
+    bool timing=AudioObjectHasProperty(dev,&timing_property);
+    if(timing)print_string(dev,'ftuT',"initial timing");
     UInt32 original=0; if(get(dev,kAudioDevicePropertyBufferFrameSize,kAudioObjectPropertyScopeGlobal,sizeof original,&original)) return 1;
     AudioValueRange range={0}; OSStatus range_status=get(dev,kAudioDevicePropertyBufferFrameSizeRange,kAudioObjectPropertyScopeGlobal,sizeof range,&range);
     printf("buffer range: status=%d min=%.0f max=%.0f\n",range_status,range.mMinimum,range.mMaximum);
@@ -163,13 +166,17 @@ int main(int argc,char **argv) {
     if(!started) while(!atomic_load(&s.done) && !atomic_load(&s.error) && !interrupted && polls<(MAX_SECONDS+5)*10) {
         CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.001,false);
         struct timespec pause={0,100000000}; nanosleep(&pause,NULL);
-        if(polls%10==0) print_string(dev,'ftuS',"running status");
+        if(polls%10==0) {
+            print_string(dev,'ftuS',"running status");
+            if(timing)print_string(dev,'ftuT',"running timing");
+        }
         if(!status_is(dev,"\"phase\":2")) {atomic_store(&s.error,6);break;}
         fflush(stdout); polls++;
     }
     OSStatus stopped=started?0:AudioDeviceStop(dev,proc),destroyed=AudioDeviceDestroyIOProcID(dev,proc);
     printf("stop: %d destroy: %d interrupted: %d done: %d error: %u\n",stopped,destroyed,interrupted,atomic_load(&s.done),atomic_load(&s.error));
     print_string(dev,'ftuS',"stopped status");
+    if(timing)print_string(dev,'ftuT',"stopped timing");
     if(stopped || destroyed) return 1; /* process exit owns callback storage on failed teardown */
     if(requested) request_buffer(dev,original,"restore"); report_buffer(dev,"final");
     UInt32 restored=0; bool restore_ok=!get(dev,kAudioDevicePropertyBufferFrameSize,kAudioObjectPropertyScopeGlobal,sizeof restored,&restored) && restored==original;

@@ -122,6 +122,12 @@ impl Journal<'_> {
 /// Capture must be copied here before the native slot is reused; ordered delivery
 /// later supplies its absolute sample cursor. Implementations preallocate storage.
 pub trait StreamIo {
+    /// Optional observation on the USB owner thread. It never changes scheduling
+    /// or turns a diagnostic clock-read error into a transport failure.
+    fn submission_timing(&self) -> bool {
+        false
+    }
+    fn submitted(&mut self, _start: u64, _checked: u64, _returned: Option<u64>) {}
     fn progress(&mut self, _submitted: [usize; 2], _completed: [usize; 2], _pending: [usize; 2]) {}
     fn capture(
         &mut self,
@@ -541,6 +547,14 @@ impl PoolSession {
                     self.max_pending[d] = self.max_pending[d].max(self.pending()[d]);
                     if d == 1 {
                         self.feedback[seq % FEEDBACK_SLOTS] = None;
+                        if io.submission_timing() {
+                            let mut returned = Clock::default();
+                            let valid = (ops.base.clock)(ctx, &mut returned) == 0;
+                            if valid {
+                                record.submit_return_frame = returned.frame;
+                            }
+                            io.submitted(start, now.frame, valid.then_some(returned.frame));
+                        }
                     }
                 }
             }

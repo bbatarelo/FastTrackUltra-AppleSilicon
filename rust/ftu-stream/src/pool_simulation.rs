@@ -591,13 +591,21 @@ fn live_session_start_clients_stop_restart_and_epoch_isolation() {
             };
             assert_eq!(ftu_live_timestamp(handle, &mut z), 0);
             assert_eq!(z.epoch, epoch);
+            // ZTS may still be frame zero at startup. Address the live capture
+            // cursor rather than assuming that a timestamp period has elapsed.
+            let mut status = Status::default();
+            ftu_live_status(handle, &mut status);
+            assert!(status.captured >= 512);
             let mut data = [0.; 64 * 8];
             assert_eq!(
-                ftu_live_read(handle, z.frame - 512, 64, data.as_mut_ptr()),
+                ftu_live_read(handle, status.captured - 512, 64, data.as_mut_ptr()),
                 0
             );
             assert!(data.iter().all(|&x| x == 0.25));
-            assert_eq!(ftu_live_write(handle, z.frame + 4096, 64, data.as_ptr()), 0);
+            assert_eq!(
+                ftu_live_write(handle, status.captured + 4096, 64, data.as_ptr()),
+                0
+            );
             assert_eq!(ftu_live_write(handle, u64::MAX, 64, data.as_ptr()), -1);
             assert_eq!(ftu_live_stop(handle, 7), 0);
             assert_eq!(ftu_live_timestamp(handle, &mut z), 0);
@@ -619,8 +627,26 @@ fn live_session_start_clients_stop_restart_and_epoch_isolation() {
 
 #[test]
 fn live_journal_recycles_without_duration_storage_or_allocations() {
-    struct Sink;
-    impl StreamIo for Sink {}
+    struct Sink(crate::timing::Timing);
+    impl StreamIo for Sink {
+        fn submission_timing(&self) -> bool {
+            true
+        }
+        fn submitted(&mut self, start: u64, checked: u64, returned: Option<u64>) {
+            self.0.observe(
+                crate::timing::Metric::SubmitCheckLeadMs,
+                crate::timing::distance(start, checked),
+                48_000,
+            );
+            if let Some(returned) = returned {
+                self.0.observe(
+                    crate::timing::Metric::SubmitReturnLeadMs,
+                    crate::timing::distance(start, returned),
+                    48_000,
+                );
+            }
+        }
+    }
     let mut signal = 0;
     let mut f = Fake::new(0, &mut signal, 10000);
     let ctx = (&mut f as *mut Fake).cast::<c_void>();
@@ -640,7 +666,7 @@ fn live_journal_recycles_without_duration_storage_or_allocations() {
         records: &mut records,
         recycle: true,
     };
-    let mut sink = Sink;
+    let mut sink = Sink(crate::timing::Timing::new());
     ALLOCS.with(|v| v.set(0));
     TRACK.with(|v| v.set(true));
     unsafe {
@@ -655,6 +681,13 @@ fn live_journal_recycles_without_duration_storage_or_allocations() {
     assert_eq!(s.pending(), [0; 2]);
     assert!(s.reused[0] >= 4996 && s.reused[1] > 4900);
     assert_eq!(records[0].len() + records[1].len(), 64);
+    let snapshot = sink.0.snapshot();
+    let check = &snapshot.metrics[1][crate::timing::Metric::SubmitCheckLeadMs as usize];
+    let returned = &snapshot.metrics[1][crate::timing::Metric::SubmitReturnLeadMs as usize];
+    assert_eq!(check.count, s.next[1] as u64);
+    assert_eq!(returned.count, check.count);
+    assert!(returned.min > 1);
+    assert_eq!(returned.dropped, 0);
 }
 
 static QUARANTINE_FAULT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);

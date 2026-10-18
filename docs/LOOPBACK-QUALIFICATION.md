@@ -10,6 +10,9 @@ the physical input-4 return. Six independent loopback sessions accepted all
 twelve chirps, with actual callback sizes of 64, 128 and 192 frames. The measured
 round trip is **110.54–115.87 ms**, too high for comfortable software monitoring.
 This establishes a reproducible development baseline, not release qualification.
+The later [timing geometry comparison](TIMING-GEOMETRY.md) records the new
+contributor builds, wider measured buffers and candidate listening results;
+the historical measurements below remain tied to the build named above.
 
 ## Physical loopback and buffer results
 

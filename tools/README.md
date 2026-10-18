@@ -3,6 +3,7 @@
 | Tool | Purpose | Starts hardware audio? |
 |---|---|---|
 | `make check` / `build/hal-check` | Loaded build, device geometry and health | No, without explicit tone/silence options |
+| `build/hal-check --timing` | Read-only playback/capture margins when the installed build exposes `ftuT` | No |
 | `build/hal-scenarios` | Bounded buffer/read-back and multi-client experiments | Yes, silent streaming |
 | [`hal-loopback`](hal-loopback/README.md) | Output 3 → selected input 3/4; raw/timestamp RTL and actual callbacks | Yes, explicit prepared run; saves selected input |
 | [`ftu-probe`](ftu-probe/README.md) | Descriptors, controls and bounded raw-USB experiments | Depends on the explicit subcommand |

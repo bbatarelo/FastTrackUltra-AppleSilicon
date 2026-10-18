@@ -17,8 +17,8 @@ args = parser.parse_args()
 path = args.directory.resolve()
 if not (path/'config.json').is_file() or any((path/n).exists() for n in ('run.log','capture.f32','callbacks.csv','invocation.json')):
     parser.error('use a freshly prepared run directory')
-if args.buffer is not None and not 64 <= args.buffer <= 1024:
-    parser.error('buffer must be 64..1024')
+if args.buffer is not None and not 64 <= args.buffer <= 4096:
+    parser.error('buffer must be 64..4096')
 command = [str(ROOT/'build/hal-loopback'),str(path)]
 if args.buffer is not None:
     command.append(str(args.buffer))
@@ -27,7 +27,7 @@ if config.get('input_channel') not in (3,4) or config.get('output_channel')!=3:
     parser.error('unsupported channel configuration')
 command.extend(['--input',str(config['input_channel'])])
 sources = ['tools/hal-loopback/main.c','tools/hal-loopback/permission.m',
-           'tools/hal-loopback/analyze.py','tools/hal-check/main.c',
+           'tools/hal-loopback/analyze.py','tools/hal-loopback/timing_analysis.py','tools/hal-check/main.c',
            'scripts/run_hal_loopback.py','build/hal-loopback']
 installed = Path('/Library/Audio/Plug-Ins/HAL/FastTrackUltra.driver/Contents/MacOS/FastTrackUltra')
 meta = dict(started_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),argv=command,

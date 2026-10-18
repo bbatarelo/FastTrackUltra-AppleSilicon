@@ -53,16 +53,27 @@ state. The launching app in the current Codex desktop environment is attributed
 to **ChatGPT** by macOS. Temporary access must be restored after testing if that
 is what the owner authorized.
 
-An optional `--buffer N` on the runner requests 64–1024 frames, logs status and
+An optional `--buffer N` on the runner requests 64–4096 frames, logs status and
 immediate/delayed read-back before and after IOProc creation, records actual
 callback spans, and restores the original size after stop. A request outside
 the HAL-reported range is a coercion/rejection experiment, not a supported-size
-qualification. The driver source declares 64–1024 but this Mac's HAL currently
-reports **15–192**. Do not label a 192-frame run as a 1024-frame success.
+qualification. The measured baseline declared 64–1024 but exposed **15–192**.
+The [measured geometry candidate](../../docs/TIMING-GEOMETRY.md) exposes 15–4096
+on the test Mac and delivered actual 64–4096 callbacks in the planned sweep.
+Sizes below 64 remain unqualified. Do not label a coerced 192-frame run as a
+1024- or 4096-frame success. Keep other audio clients idle for isolated trials;
+a shared stop is rejected even if the chirps correlate.
 
 `run.log`, callback CSV, mono Float32 capture, configuration, executable/source
 hashes and analysis are retained. Do not reuse/overwrite a run directory. The
 runner has a finite timeout; forced termination is a failed trial.
+
+On instrumented builds the log also retains the read-only `ftuT` property.
+[Timing observation definitions](../../docs/TIMING-OBSERVATION.md) describe its
+startup/steady banks and signed margins. The independent analyzer validates the
+final snapshot and rejects incomplete evidence, dropped observations, steady
+payload loss and insufficient observed submission lead. Older builds without
+that property have `timing: null`; that is unavailable evidence, not a pass.
 
 ## Measurement definitions and limits
 

@@ -25,6 +25,25 @@ struct ftu_live_status {
     int32_t submit_status; uint32_t submit_direction;
     uint64_t submit_sequence, submit_start, submit_checked, submit_returned;
 };
+/* Timing v1 is observation only. Metrics are individually coherent snapshots;
+ * valid=0 means a bounded read/reset race. Empty min/max/last are not measured.
+ * Banks: 0 all observations, 1 captured cursor >= steady_after (48000 frames).
+ * Buckets use exclusive upper bounds in limits, then an unbounded final bucket.
+ * Indices/units are specified in docs/TIMING-OBSERVATION.md. */
+#define FTU_TIMING_METRICS 12
+#define FTU_TIMING_BUCKETS 17
+struct ftu_timing_metric {
+    uint64_t valid, count;
+    int64_t min, max, last;
+    uint64_t dropped, buckets[FTU_TIMING_BUCKETS];
+};
+struct ftu_timing_snapshot {
+    uint32_t version, metric_count;
+    uint64_t epoch, steady_after, valid;
+    int64_t limits[FTU_TIMING_BUCKETS-1];
+    struct ftu_timing_metric metrics[2][FTU_TIMING_METRICS];
+};
+void ftu_live_timing(struct ftu_live *, struct ftu_timing_snapshot *);
 /* phase: 0 idle, 1 starting, 2 running, 3 stopping, 4 fault, 5 quarantined.
  * Quarantine forbids restart and retains uncertain native resources in-process.
  * Startup/stop are control-thread calls; IO/timestamp calls are bounded, with

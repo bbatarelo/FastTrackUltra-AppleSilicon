@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import re
 import numpy as np
+from timing_analysis import analyze_timing
 
 RATE = 48000
 
@@ -84,7 +85,7 @@ def check_cycles(cycles, captured):
     previous = None
     for row in cycles:
         n = row['frames']
-        if row['raw'] != position or not 1 <= n <= 1024:
+        if row['raw'] != position or not 1 <= n <= 4096:
             problems.append('delivered_frame_gap')
         for key in ('input', 'output'):
             if not row[key+'_flags'] & 1 or not np.isfinite(row[key+'_sample']):
@@ -139,6 +140,9 @@ def analyze(path):
     steady = states[1:]
     if steady and any(s[k]!=steady[0][k] for s in steady for k in ('epoch','playback_missing','capture_missing')):
         problems.append('steady_state_discontinuity')
+    timing = analyze_timing(log)
+    if timing is not None and not timing['accepted']:
+        problems.append('timing_observation_invalid')
     declarations = {}
     for d,k,st,v in re.findall(r'declaration (input|output) (\w+): status=(-?\d+) value=(\d+)',log):
         declarations[d+'_'+k] = int(v) if int(st)==0 else None
@@ -162,7 +166,7 @@ def analyze(path):
     result = dict(config=config, callback_count=len(cycles), captured_frames=len(capture),
                   callback_frame_distribution=dict(Counter(c['frames'] for c in cycles)),
                   declarations=declarations, run_rejections=problems, trials=trials,
-                  health_samples=states, capture_peak=float(np.max(np.abs(capture))) if len(capture) and np.isfinite(capture).all() else None,
+                  health_samples=states, timing=timing, capture_peak=float(np.max(np.abs(capture))) if len(capture) and np.isfinite(capture).all() else None,
                   accepted=not problems and all(t['accepted'] for t in trials))
     (path/'analysis.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
     return result

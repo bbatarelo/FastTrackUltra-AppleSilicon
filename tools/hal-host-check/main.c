@@ -4,6 +4,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
 #include <math.h>
+#include <mach/mach_time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,9 @@ int main(int argc,char **argv){
     char identity[128];if(!CFStringGetCString(build,identity,sizeof identity,kCFStringEncodingUTF8))return 1;CFRelease(build);
     AudioStreamBasicDescription format;if(get(4,kAudioStreamPropertyVirtualFormat,kAudioObjectPropertyScopeGlobal,sizeof format,&format))return 1;
     if(format.mSampleRate!=48000 || format.mChannelsPerFrame!=8 || format.mBytesPerFrame!=32)return 1;
+    UInt32 period=0;
+    if(get(2,kAudioDevicePropertyZeroTimeStampPeriod,kAudioObjectPropertyScopeGlobal,sizeof period,&period) || !period)return 1;
+    mach_timebase_info_data_t timebase;if(mach_timebase_info(&timebase)!=KERN_SUCCESS)return 1;
     UInt32 safety=0;if(get(2,kAudioDevicePropertySafetyOffset,kAudioObjectPropertyScopeOutput,4,&safety))return 1;
     printf("{\"event\":\"loaded\",\"build\":\"%s\",\"rate\":%.0f,\"channels\":%u,\"safety\":%u}\n",identity,format.mSampleRate,format.mChannelsPerFrame,safety);fflush(stdout);
     AudioServerPlugInClientInfo client={.mClientID=77,.mProcessID=getpid()};if((*driver)->AddDeviceClient(driver,2,&client))return 1;
@@ -40,16 +44,21 @@ int main(int argc,char **argv){
         Float64 frame=0;UInt64 ticks=0,seed=0;if((*driver)->GetZeroTimeStamp(driver,2,77,&frame,&ticks,&seed)){error=1;break;}
         if(previous_frame>=0 && (frame<previous_frame || ticks<previous_ticks || seed!=previous_seed || (frame==previous_frame && ticks!=previous_ticks))){error=2;break;}
         if(frame!=previous_frame)updates++;previous_frame=frame;previous_ticks=ticks;previous_seed=seed;
-        if(!cursor)cursor=(uint64_t)frame+safety;
-        uint64_t end=(uint64_t)frame+safety+1024;
+        /* Emulate a host progressing between held timestamp pairs. Nominal
+         * rate here drives diagnostic silence only; it is not a clock fit. */
+        uint64_t host=mach_absolute_time();if(host<ticks){error=5;break;}
+        double elapsed=(double)(host-ticks)*timebase.numer/timebase.denom*1e-9;
+        uint64_t current=(uint64_t)(frame+floor(elapsed*format.mSampleRate));
+        if(!cursor)cursor=current+safety;
+        uint64_t end=current+safety+1024;
         while(cursor<end){UInt32 n=(UInt32)((end-cursor)>1024?1024:end-cursor);AudioServerPlugInIOCycleInfo cycle={0};cycle.mOutputTime.mSampleTime=(Float64)cursor;cycle.mOutputTime.mFlags=kAudioTimeStampSampleTimeValid;
             if((*driver)->DoIOOperation(driver,2,4,77,kAudioServerPlugInIOOperationWriteMix,n,&cycle,zero,NULL)){error=3;break;}cursor+=n;}
         if(error)break;
-        if(frame>1024){AudioServerPlugInIOCycleInfo cycle={0};cycle.mInputTime.mSampleTime=frame-1024;cycle.mInputTime.mFlags=kAudioTimeStampSampleTimeValid;if((*driver)->DoIOOperation(driver,2,3,77,kAudioServerPlugInIOOperationReadInput,256,&cycle,input,NULL)){error=4;break;}}
+        if(current>1024){AudioServerPlugInIOCycleInfo cycle={0};cycle.mInputTime.mSampleTime=(Float64)(current-1024);cycle.mInputTime.mFlags=kAudioTimeStampSampleTimeValid;if((*driver)->DoIOOperation(driver,2,3,77,kAudioServerPlugInIOOperationReadInput,256,&cycle,input,NULL)){error=4;break;}}
         struct timespec pause={0,2000000};nanosleep(&pause,NULL);
     }
     diagnostic("before_stop");int stop=(*driver)->StopIO(driver,2,77);diagnostic("stopped");
     printf("{\"event\":\"result\",\"check_error\":%d,\"stop\":%d,\"clock_updates\":%llu,\"elapsed\":%.6f}\n",error,stop,(unsigned long long)updates,now()-began);fflush(stdout);
     /* Do not dlclose: the plug-in's process-lifetime discovery monitor is live. */
-    return error || stop || updates<seconds*50?1:0;
+    return error || stop || updates+1<(uint64_t)(seconds*format.mSampleRate/period)?1:0;
 }

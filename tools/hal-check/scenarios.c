@@ -43,7 +43,7 @@ static bool observe(AudioDeviceID device,const char *stage,unsigned seconds,stru
 int main(int argc,char **argv){
     UInt32 requested=0;unsigned hold=10;
     if(argc!=1 && argc!=3 && argc!=5)return 2;
-    if(argc>=3){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(strcmp(argv[1],"--buffer") || *end || n<64 || n>1024)return 2;requested=(UInt32)n;}
+    if(argc>=3){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(strcmp(argv[1],"--buffer") || *end || n<64 || n>4096)return 2;requested=(UInt32)n;}
     if(argc==5){char *end=NULL;unsigned long n=strtoul(argv[4],&end,10);if(strcmp(argv[3],"--hold") || *end || n<10 || n>120)return 2;hold=(unsigned)n;}
     AudioDeviceID device=find_device();if(!device || !describe(device) || !status_is(device,"\"phase\":0"))return 1;
     UInt32 original=0;if(get(device,kAudioDevicePropertyBufferFrameSize,kAudioObjectPropertyScopeGlobal,sizeof original,&original))return 1;
