@@ -7,6 +7,8 @@
 | `build/hal-check --timing` | Read-only playback/capture margins when the installed build exposes `ftuT` | No |
 | `build/hal-scenarios` | Bounded buffer/read-back and multi-client experiments | Yes, silent streaming |
 | [`hal-loopback`](hal-loopback/README.md) | Output 3 → selected input 3/4; raw/timestamp RTL and actual callbacks | Yes, explicit prepared run; saves selected input |
+| [`build/hal-soak`](hal-loopback/README.md#extended-sessions-and-application-transitions) | Opt-in duplex measurements bounded to ten minutes | Yes, explicit prepared run; saves selected input |
+| [`build/hal-observe`](hal-loopback/README.md#extended-sessions-and-application-transitions) | Continuously sample driver status/timing around application transitions | No |
 | [Offline timing model](timing-model/README.md) | USB block/depth, callback/stall, feedback-capacity and deadline experiments | No |
 | [`ftu-probe`](ftu-probe/README.md) | Descriptors, controls and bounded raw-USB experiments | Depends on the explicit subcommand |
 | `build/live-check` | Standalone Rust live-session bring-up | Yes; direct USB ownership |
@@ -23,3 +25,7 @@ rate, actual buffers, permissions and tool hashes. Follow the relevant command
 guide before sending audio or recording inputs. Source-level API/CLI options
 are authoritative for each development tool; old experiment references link
 to the frozen archive, not an active second driver branch.
+
+For bounded ten-minute physical sessions and continuously sampled GarageBand
+transitions, see the [extended loopback tools](hal-loopback/README.md#extended-sessions-and-application-transitions).
+These are external clients/observers; building them does not replace the driver.

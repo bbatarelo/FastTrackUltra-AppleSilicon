@@ -1,9 +1,30 @@
 import unittest
+import json
+import tempfile
+from pathlib import Path
 import numpy as np
-from analyze import chirp, detect, check_cycles, timestamp
+from analyze import chirp, detect, check_cycles, timestamp, prepare
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_extended_plan_is_bounded_and_preserves_short_fixture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for seconds in (8, 31):
+                path = root / str(seconds)
+                prepare(path, input_channel=4, seconds=seconds)
+                config = json.loads((path / 'config.json').read_text())
+                samples = np.fromfile(path / 'stimulus.f32', dtype='<f4')
+                self.assertEqual(len(samples), seconds * 48000)
+                self.assertLessEqual(float(np.max(np.abs(samples))), .01)
+                self.assertEqual(config['starts'], [96000, 240000] if seconds == 8 else list(range(96000, 30*48000, 5*48000)))
+                for start in config['starts']:
+                    self.assertTrue(np.array_equal(samples[start:start+2048], chirp()))
+            for seconds in (0, 7, 601, 8.5):
+                path = root / ('invalid-' + str(seconds))
+                with self.assertRaises(ValueError): prepare(path, seconds=seconds)
+                self.assertFalse(path.exists())
+
     def setUp(self):
         self.ref = chirp(512)
 

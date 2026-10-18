@@ -7,7 +7,14 @@
 #undef main
 #include <signal.h>
 
-enum { CHANNEL = 2, RATE = 48000, MAX_SECONDS = 30, MAX_CALLBACKS = 30000 };
+#ifndef FTU_LOOPBACK_MAX_SECONDS
+#define FTU_LOOPBACK_MAX_SECONDS 30
+#endif
+#if FTU_LOOPBACK_MAX_SECONDS < 1 || FTU_LOOPBACK_MAX_SECONDS > 600
+#error "The external loopback instrument must remain bounded to 1..600 seconds"
+#endif
+enum { CHANNEL = 2, RATE = 48000, MAX_SECONDS = FTU_LOOPBACK_MAX_SECONDS,
+       MAX_CALLBACKS = MAX_SECONDS > 30 ? MAX_SECONDS * (RATE / 64) + 1 : 30000 };
 struct cycle {
     uint64_t raw, in_host, out_host, now_host;
     double in_sample, out_sample;

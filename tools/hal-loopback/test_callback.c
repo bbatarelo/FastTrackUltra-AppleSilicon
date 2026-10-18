@@ -58,6 +58,13 @@ int main(void) {
     loop_io(0,NULL,&ib,&it,&ob,&ot,&s);
     assert(atomic_load(&s.error)==2 && s.position==0);
     for(unsigned i=0;i<4097*8;i++) assert(large_out[i]==0);
+    /* Saturated observation storage must silence without touching its end. */
+    ib.mBuffers[0].mDataByteSize=ob.mBuffers[0].mDataByteSize=4096*8*sizeof(float);
+    s=(struct loop){.plan=large_plan,.capture=large_capture,.capacity=4096,
+        .cycles=cycles,.cycle_count=MAX_CALLBACKS,.input_channel=3};
+    loop_io(0,NULL,&ib,&it,&ob,&ot,&s);
+    assert(atomic_load(&s.error)==2 && s.position==0 && s.cycle_count==MAX_CALLBACKS);
+    for(unsigned i=0;i<4096*8;i++) assert(large_out[i]==0);
     free(large_in);free(large_out);free(large_plan);free(large_capture);
     puts("callback channel routing, gap silence, level cutoff and finite stop: PASS");
     return 0;

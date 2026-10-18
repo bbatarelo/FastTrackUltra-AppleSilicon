@@ -14,6 +14,7 @@
 | [Findings](FINDINGS.md) | Looking up measured protocol and HAL behavior |
 | [GarageBand and loopback](LOOPBACK-QUALIFICATION.md) | Reading the reproducible 48 kHz hardware baseline |
 | [Sample placement and safety reduction](PLACEMENT-MODEL.md) | Understanding physical latency, the independent model and the qualified four-slot 2560 reduction |
+| [Longer sessions and app transitions](LONG-SESSION.md) | Reviewing the ten-minute duplex runs, GarageBand cycle/recording checks and preserved evidence |
 | [ASFireWire lessons](ASFW-REUSE.md) | Evaluating timing, ownership and measurement methods |
 | [Diagnostics](../tools/README.md) | Choosing a read-only inspector or an explicit hardware experiment |
 | [Packaging](PACKAGING.md) | Preparing installers and future signed/notarized releases |

@@ -101,3 +101,39 @@ client. Output remains fixed at 3. Confirm input-4 wiring and Rear selection
 before running; this alternative does not itself prove hardware monitoring is off.
 See the [measured baseline](../../docs/LOOPBACK-QUALIFICATION.md) for the six
 accepted sessions and the limits on their interpretation.
+
+## Extended sessions and application transitions
+
+The normal binary remains capped at 30 seconds. An opt-in external client can
+run for at most ten minutes, with storage allocated before starting audio:
+
+```sh
+make build/hal-soak build/hal-observe test-loopback
+python3 tools/hal-loopback/analyze.py prepare build/trials/MY-LONG-RUN --input 4 --seconds 600
+python3 scripts/run_hal_loopback.py build/trials/MY-LONG-RUN --buffer 64 --extended
+python3 tools/hal-loopback/analyze.py analyze build/trials/MY-LONG-RUN
+```
+
+Extended plans emit a quiet chirp every five seconds, starting at two seconds.
+The transport and selected-input capture are continuous. Other outputs remain
+zero, input is never monitored, and the same level, geometry and timestamp
+cutoffs apply. This does not test audible signal quality between chirps. The
+wrapper retains source/binary identities and imposes a duration-based deadline.
+Use a new directory for every attempt. Keep unrelated clients closed for an
+isolated test; a shared GarageBand run is a separate application experiment.
+
+`build/hal-observe 600` reads status at approximately 20 Hz and timing at 1 Hz,
+writing JSONL. It creates no audio client, retains no audio, and changes no device
+property. Host ticks bracket each property query. Redirect its output to a new
+file before operating GarageBand, then stop it with SIGTERM to retain a final
+snapshot. `transition_analysis.py` analyzes that trace and optional JSONL UI
+markers (`ticks`, `event`, `details`). Counter changes in established epochs
+are failures; early-epoch changes are retained separately, not erased. This
+sampling bounds a transition interval but cannot identify every HAL call or
+attribute a shared-device change to one client.
+
+`recording_analysis.py` checks a mono 48 kHz PCM WAV converted offline from a
+GarageBand recording. It rejects missing, extra, weak and incorrectly spaced
+chirp returns. Keep the original file and conversion command/hash. Recorded file
+positions do not independently measure physical RTL or prove native 44.1 kHz
+operation. These diagnostics make no listening claim when the owner is absent.

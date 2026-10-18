@@ -60,6 +60,11 @@ $(BUILD)/hal-scenarios: tools/hal-check/scenarios.c tools/hal-check/main.c | $(B
 	clang $(CFLAGS) -o $@ $< -framework CoreAudio -framework CoreFoundation
 $(BUILD)/hal-loopback: tools/hal-loopback/main.c tools/hal-loopback/permission.m tools/hal-check/main.c | $(BUILD)
 	clang $(CFLAGS) -o $@ tools/hal-loopback/main.c tools/hal-loopback/permission.m -framework CoreAudio -framework CoreFoundation -framework AVFoundation -framework Foundation
+# Extended instrument and read-only observer are opt-in developer tools.
+$(BUILD)/hal-soak: tools/hal-loopback/main.c tools/hal-loopback/permission.m tools/hal-check/main.c | $(BUILD)
+	clang $(CFLAGS) -DFTU_LOOPBACK_MAX_SECONDS=600 -o $@ tools/hal-loopback/main.c tools/hal-loopback/permission.m -framework CoreAudio -framework CoreFoundation -framework AVFoundation -framework Foundation
+$(BUILD)/hal-observe: tools/hal-check/observe.c tools/hal-check/main.c | $(BUILD)
+	clang $(CFLAGS) -o $@ $< -framework CoreAudio -framework CoreFoundation
 $(BUILD)/test-loopback-callback: tools/hal-loopback/test_callback.c tools/hal-loopback/main.c tools/hal-check/main.c | $(BUILD)
 	clang $(CFLAGS) -O1 -Wno-unused-function -fsanitize=address,undefined -o $@ $< -framework CoreAudio -framework CoreFoundation
 .PHONY: test-loopback

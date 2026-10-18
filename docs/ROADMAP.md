@@ -33,11 +33,14 @@ The [three-slot outcome](QUEUE-MODEL.md) preserves all seven attempts, the
   0.106 ms submitting. This identifies the next boundary to investigate, not the
   cause of the earlier three-slot failure. Keep that experiment's original gate
   and failed attempt; no passing rerun erases it.
-- Extend the [four-slot/output-2560 qualification](PLACEMENT-MODEL.md) to longer
-  sessions and application transitions. The approximately 10.667 ms prediction
-  was confirmed; minimum submission lead was 22 ms and steady losses stayed zero.
+- The [four-slot/output-2560 qualification](PLACEMENT-MODEL.md) now includes
+  [two ten-minute duplex runs and GarageBand transitions](LONG-SESSION.md), with
+  zero steady losses and unchanged latency. Minimum submission lead fell from
+  22 ms in the short sweep to 17 ms in the longer runs, against the same 16 ms
+  gate. Keep this measured checkpoint and its margins while investigating
+  scheduling; extend to longer continuous music, other DAWs and more hosts.
   The independent model rejects a larger output cut under the selected
-  HAL-publication disturbance. Keep this measured checkpoint before another change.
+  HAL-publication disturbance.
 - Investigate restart/startup reliability. The first read-only enumeration after
   the latest install timed out during high CoreAudio CPU use; a later query and
   all audio tests succeeded. Preserve the diagnostic evidence and establish cause
@@ -58,8 +61,10 @@ The [three-slot outcome](QUEUE-MODEL.md) preserves all seven attempts, the
 - Retain geometry/read-back regressions: the 16384-frame period now permits
   actual 4096-frame callbacks on this Mac. Extend qualification to other hosts
   and investigate the external minimum of 15 versus the declared 64.
-- Trace play/stop/record/seek transitions continuously to explain the observed
-  128-frame GarageBand output-miss increase between sampled phases.
+- Keep continuous transition tracing for future candidates. The current
+  GarageBand play/stop/record/seek/save/close/reopen/quit sequence had no established-
+  epoch losses; the earlier 128-frame event was not reproduced and remains
+  unexplained. Do not discard it because the newer sequence passed.
 - Repeat raw/timestamp loopback across actual buffers and independent starts.
   Calibrate latency declarations only after reference planes are understood.
 

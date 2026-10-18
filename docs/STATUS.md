@@ -4,8 +4,10 @@ As of 18 October 2026, **`dev-8387395854108015` is installed and verified loaded
 on the desktop Fast Track Ultra, Apple Silicon, macOS 26.7.1. This
 [output-safety reduction](PLACEMENT-MODEL.md) passed thirteen physical loopback
 runs, two silent two-client scenarios and the owner's five-pair output-1/2
-listening check. The installed binary matches the frozen bundle; current source
-uses the same configuration.
+listening check. It subsequently passed [two ten-minute duplex runs and a
+GarageBand playback/recording transition sequence](LONG-SESSION.md). The installed
+binary matches the frozen bundle; current source uses the same driver
+configuration. The later diagnostic-only changes affect future build identities.
 
 Native 48 kHz, four 8 ms USB slots per direction and input safety 1024 are
 unchanged. Output safety is now **2560 frames**, down from 3072. Raw round trip
@@ -43,18 +45,27 @@ The additional availability screen retained at least **150 frames** after
 reserving one client buffer plus a maximum-size USB block; this is a heuristic,
 not proof of contiguous sample coverage.
 
+The longer qualification retained 240 chirps and 506,250 callbacks across two
+ten-minute runs at 64 and 512 frames, with unchanged latency and zero steady
+losses. Minimum submission lead reached **17 ms**, only 1 ms above the same
+16 ms gate. GarageBand then completed over five minutes of cycle playback,
+recorded all 36 chirps from a three-minute shared stimulus, and passed
+play/stop/seek/save/close/reopen/quit checks. Its saved 216-second take passed
+signal/spacing analysis. The owner was away, so this is measured evidence,
+not an additional listening pass. See the [full results and limits](LONG-SESSION.md).
+
 ## Scope and remaining limits
 
 | Area | Verified behavior | Remaining limits |
 |---|---|---|
 | Desktop Ultra | Native 48 kHz, eight Float32 inputs/outputs published | More units/Macs/OS versions and all-channel tests |
 | Ultra 8R | Product ID recognized by shared driver | Hardware not tested |
-| Playback | Current build: owner-confirmed clean output-1/2 tones and output 3 physical return | Longer sessions and other outputs |
-| Recording | Current build: input 4 physical diagnostic return | Other inputs; input-3 same-channel loop saturation unresolved |
+| Playback | Current build: owner-confirmed output-1/2 tones, two ten-minute output-3 duplex tests, over five minutes GarageBand cycling | Longer music/listening sessions and other outputs |
+| Recording | Current build: two ten-minute input-4 captures and 36 chirps retained in a 216-second GarageBand take | Other inputs; input-3 same-channel loop saturation unresolved |
 | Buffers | Current build: two loopback starts each at actual 64–4096 frames | External minimum 15 differs from declared 64; below 64 unqualified |
 | Latency | Current build: 78.539 ms at 64 frames | Still high for monitoring |
-| Two clients | Current build: silent A → A+B → B at 64 and 4096; clean final stop | Longer application-transition tracing |
-| Applications | Research build: VLC/GarageBand clean playback, Spotify owner report, GarageBand recording and transport | Not repeated on this build; one earlier unclassified 128-frame transition loss |
+| Two clients | Current build: silent A → A+B → B at 64 and 4096; three-minute shared GarageBand recording; clean final stop | More client combinations and longer sessions |
+| Applications | Current build: measured GarageBand cycling, recording and transport/project transitions; earlier VLC/Spotify owner reports retained | Earlier unclassified 128-frame transition loss remains unexplained; more DAWs |
 | MIDI | Planned | System handling and bidirectional CoreMIDI behavior unqualified |
 | Mixer/DSP | Audio uses existing hardware configuration | Effective control read-back, routing app and effects unqualified |
 | Install/package | Current installation and earlier checkpoint rollback verified by loaded identity and installed hash | Fresh-Mac setup and live `.pkg` installation remain untested |
@@ -85,17 +96,18 @@ Offline checks passed 116 Rust tests, six placement-model tests, four transport-
 model tests, HAL/native/callback sanitizer checks, 18 Python tests, Clippy and
 bundle validation. Claude independently reviewed the design and new model.
 
-Next: qualify longer sessions and trace application transitions, then investigate
-completion delivery, worker scheduling and shorter USB batches. Extend the model
+Next: investigate completion delivery, worker scheduling and shorter USB batches
+using the preserved longer-session measurements. The 17 ms minimum lead argues
+for retaining current margins while that work proceeds. Extend the model
 with production-pool behavior and drift, and characterize capture constraints
 before lowering input safety. The [ASFW comparison](ASFW-REUSE.md) records concrete
 methods to evaluate later in E-MU; no E-MU source has changed.
 
 Only native 48 kHz is supported. Earlier VLC/GarageBand 44.1 kHz sessions exercised
 application conversion. Other rates, clock modes, MIDI, hotplug/sleep/wake,
-automatic recovery and multiple Ultras are roadmap work. This is short
-qualification on one unit and Mac, not a long-session guarantee or a per-version
-macOS compatibility matrix.
+automatic recovery and multiple Ultras are roadmap work. These bounded tests
+cover one unit and Mac; they do not establish a reliability guarantee or a
+per-version macOS compatibility matrix.
 
 See [ROADMAP.md](ROADMAP.md) for priorities and [PROVENANCE.md](PROVENANCE.md)
 for archive identity and extraction scope.

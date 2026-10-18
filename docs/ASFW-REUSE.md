@@ -80,8 +80,13 @@ Repeated starts showed a consistent short-run result. Rejected permission and
 input-level trials remain beside the accepted sessions. A later GarageBand
 transition increased the output-miss counter by 128 frames outside the sampled
 listening interval; preserving that uncertainty defines the next lifecycle-
-instrumentation task. These are useful methods to evaluate in E-MU, not evidence
-that E-MU has the same defects.
+instrumentation task. The later [continuous GarageBand trace](LONG-SESSION.md)
+now brackets play/stop/seek/record and project lifecycle with host ticks and
+sampled cumulative counters. It found no established-epoch losses in that
+sequence; the older 128-frame event remains unexplained. The shared recording
+retains its isolated-run rejection and uses a separate application assessment.
+These are useful measurement methods to evaluate in E-MU, not evidence that
+E-MU has the same defects or that ASFW uses this exact UI-tracing tool.
 
 The read-back-first method already exposed a useful discrepancy: FTU's source
 originally declared a 64–1024 range, while this Mac's external HAL reported

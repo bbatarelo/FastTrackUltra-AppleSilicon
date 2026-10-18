@@ -24,11 +24,14 @@ def chirp(n=2048):
             (200 * t + 0.5 * (8000 - 200) / (n / RATE) * t * t))).astype('<f4')
 
 
-def prepare(path, silence=False, input_channel=3):
+def prepare(path, silence=False, input_channel=3, seconds=8):
+    if type(seconds) is not int or not 8 <= seconds <= 600:
+        raise ValueError('duration must be an integer from 8 to 600 seconds')
     path.mkdir(parents=True, exist_ok=False)
     ref = chirp()
-    plan = np.zeros(RATE * 8, dtype='<f4')
-    starts = [] if silence else [RATE * 2, RATE * 5]
+    plan = np.zeros(RATE * seconds, dtype='<f4')
+    starts = [] if silence else ([RATE * 2, RATE * 5] if seconds == 8 else
+                               [RATE * t for t in range(2, seconds - 1, 5)])
     for start in starts:
         plan[start:start + len(ref)] = ref
     (path / 'stimulus.f32').write_bytes(plan.tobytes())
@@ -42,8 +45,9 @@ def prepare(path, silence=False, input_channel=3):
 
 def detect(reference, signal, max_lag):
     ref = np.asarray(reference, dtype=float)
-    x = np.asarray(signal, dtype=float)
     n = len(ref)
+    # Long captures are validated once by analyze(); correlation needs one window.
+    x = np.asarray(signal[:n + max_lag], dtype=float)
     if n < 8 or len(x) < n + max_lag or not np.isfinite(ref).all() or not np.isfinite(x).all():
         return dict(accepted=False, reason='invalid_or_short_signal')
     x = x[:n + max_lag]
@@ -177,9 +181,10 @@ if __name__ == '__main__':
     parser.add_argument('command', choices=('prepare','prepare-silence','analyze'))
     parser.add_argument('directory', type=Path)
     parser.add_argument('--input', type=int, choices=(3,4), default=3)
+    parser.add_argument('--seconds', type=int, default=8, help='bounded duration 8..600; over 30 requires hal-soak')
     args = parser.parse_args()
     if args.command.startswith('prepare'):
-        prepare(args.directory,args.command=='prepare-silence',args.input)
+        prepare(args.directory,args.command=='prepare-silence',args.input,args.seconds)
     else:
         result = analyze(args.directory)
         print(json.dumps({k:v for k,v in result.items() if k not in ('health_samples','config')},indent=2))

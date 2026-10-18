@@ -6,7 +6,8 @@ CoreAudio/USB boundary. It installs no kernel or system extension and requires
 no SIP or startup-security changes.
 
 **Early development.** Desktop Ultra playback and recording have worked at
-48 kHz, including a short GarageBand test. Monitoring latency is still high:
+48 kHz, including two ten-minute duplex tests and longer GarageBand playback,
+recording and transition checks. Monitoring latency is still high:
 about 78.5 ms round trip at 64-frame buffers, or 97.2 ms at 512 frames.
 Ultra 8R hardware and MIDI are not yet qualified.
 See [current status](docs/STATUS.md) before relying on it for a session.

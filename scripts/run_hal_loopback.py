@@ -4,6 +4,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import math
 from pathlib import Path
 import platform
 import subprocess
@@ -13,22 +14,27 @@ ROOT = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('directory', type=Path)
 parser.add_argument('--buffer', type=int)
+parser.add_argument('--extended', action='store_true', help='opt in to the separate 600-second hal-soak instrument')
 args = parser.parse_args()
 path = args.directory.resolve()
 if not (path/'config.json').is_file() or any((path/n).exists() for n in ('run.log','capture.f32','callbacks.csv','invocation.json')):
     parser.error('use a freshly prepared run directory')
 if args.buffer is not None and not 64 <= args.buffer <= 4096:
     parser.error('buffer must be 64..4096')
-command = [str(ROOT/'build/hal-loopback'),str(path)]
+instrument = 'build/hal-soak' if args.extended else 'build/hal-loopback'
+command = [str(ROOT/instrument),str(path)]
 if args.buffer is not None:
     command.append(str(args.buffer))
 config=json.loads((path/'config.json').read_text())
+frames=config.get('frames')
+if type(frames) is not int or config.get('rate') != 48000 or not 48000 <= frames <= 48000*(600 if args.extended else 30):
+    parser.error('plan must be 48 kHz, 1..30 seconds (or 1..600 with --extended)')
 if config.get('input_channel') not in (3,4) or config.get('output_channel')!=3:
     parser.error('unsupported channel configuration')
 command.extend(['--input',str(config['input_channel'])])
 sources = ['tools/hal-loopback/main.c','tools/hal-loopback/permission.m',
            'tools/hal-loopback/analyze.py','tools/hal-loopback/timing_analysis.py','tools/hal-check/main.c',
-           'scripts/run_hal_loopback.py','build/hal-loopback']
+           'scripts/run_hal_loopback.py',instrument]
 installed = Path('/Library/Audio/Plug-Ins/HAL/FastTrackUltra.driver/Contents/MacOS/FastTrackUltra')
 meta = dict(started_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),argv=command,
             macos=platform.mac_ver()[0],machine=platform.machine(),
@@ -38,7 +44,7 @@ meta = dict(started_utc=datetime.datetime.now(datetime.timezone.utc).isoformat()
 with (path/'run.log').open('x') as log:
     proc = subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,cwd=ROOT)
     try:
-        result=proc.wait(timeout=40)
+        result=proc.wait(timeout=max(40, math.ceil(frames/48000)+30))
     except (subprocess.TimeoutExpired,KeyboardInterrupt):
         proc.terminate()
         try: proc.wait(timeout=3)
