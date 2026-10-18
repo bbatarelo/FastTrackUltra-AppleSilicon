@@ -50,7 +50,7 @@ pub struct Event {
     pub return_clock_status: u64,
 }
 impl Event {
-    fn words(self) -> [u64; WORDS] {
+    pub(crate) fn words(self) -> [u64; WORDS] {
         [
             self.ordinal,
             self.direction,
@@ -86,7 +86,7 @@ impl Event {
             self.return_clock_status,
         ]
     }
-    fn from_words(w: [u64; WORDS]) -> Self {
+    pub(crate) fn from_words(w: [u64; WORDS]) -> Self {
         Self {
             ordinal: w[0],
             direction: w[1],

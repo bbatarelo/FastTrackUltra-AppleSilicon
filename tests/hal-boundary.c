@@ -96,7 +96,7 @@ int main(void){
     CFRelease(status);
     assert(ftu_set_data(g_ref,2,0,&a,0,NULL,sizeof frames,&frames)==kAudioHardwareUnsupportedOperationError);
     a=(AudioObjectPropertyAddress){kAudioObjectPropertyCustomPropertyInfoList,kAudioObjectPropertyScopeGlobal,0};
-    AudioServerPlugInCustomPropertyInfo props[4];
+    AudioServerPlugInCustomPropertyInfo props[5];
     assert(ftu_get_data(g_ref,2,0,&a,0,NULL,sizeof props,&size,props)==0 && size==sizeof props);
     assert(props[2].mSelector==FTU_TIMING_PROPERTY && props[3].mSelector==FTU_WORKER_PROPERTY);
     _Static_assert(sizeof(struct ftu_worker_event)==256,"worker event ABI");
@@ -122,6 +122,28 @@ int main(void){
     synthetic=(struct ftu_worker_snapshot){.version=1,.valid=1};synthetic.recent[0].words[0]=1;
     status=worker_snapshot_text(&synthetic);assert(CFStringGetCString(status,timing_json,sizeof timing_json,kCFStringEncodingUTF8));CFRelease(status);
     assert(strstr(timing_json,"\"previous_sequence\":null") && strstr(timing_json,"\"returned_frame\":null"));
+
+    _Static_assert(sizeof(struct ftu_delivery_snapshot)==6272,"delivery ABI");
+    assert(props[4].mSelector==FTU_DELIVERY_PROPERTY);
+    a=(AudioObjectPropertyAddress){FTU_DELIVERY_PROPERTY,kAudioObjectPropertyScopeGlobal,0};
+    assert(ftu_has_property(g_ref,2,0,&a));settable=true;
+    assert(ftu_is_settable(g_ref,2,0,&a,&settable)==0 && !settable);
+    assert(ftu_get_data(g_ref,2,0,&a,0,NULL,sizeof status-1,&size,&status)==kAudioHardwareBadPropertySizeError);
+    assert(ftu_get_data(g_ref,2,0,&a,0,NULL,sizeof status,&size,&status)==0 && status);
+    assert(CFStringGetCString(status,timing_json,sizeof timing_json,kCFStringEncodingUTF8));CFRelease(status);
+    if(getenv("FTU_TEST_JSON"))puts(timing_json);
+    assert(strstr(timing_json,"\"sample_count\":0") && strstr(timing_json,"\"min_ns\":null") && strstr(timing_json,"\"samples\":[]"));
+    assert(ftu_set_data(g_ref,2,0,&a,0,NULL,sizeof frames,&frames)==kAudioHardwareUnsupportedOperationError);
+    struct ftu_delivery_snapshot delivery={0};
+    memset(&delivery,0xff,sizeof delivery);delivery.header[17]=2;
+    status=delivery_snapshot_text(&delivery);assert(status);
+    large=malloc(131072);assert(large && CFStringGetCString(status,large,131072,kCFStringEncodingUTF8));
+    assert(strstr(large,"\"cpu_status\":-1") && strstr(large,"\"cpu_user_ns\":null") && strstr(large,"\"policy_default\":null"));
+    CFRelease(status);free(large);
+    delivery=(struct ftu_delivery_snapshot){0};delivery.header[0]=1;delivery.header[1]=1;
+    delivery.recent[0][0]=1;delivery.recent[0][14]=1;
+    status=delivery_snapshot_text(&delivery);assert(CFStringGetCString(status,timing_json,sizeof timing_json,kCFStringEncodingUTF8));CFRelease(status);
+    assert(strstr(timing_json,"\"pump_id\":null") && strstr(timing_json,"\"last_packet_ticks\":null"));
     found=false;poll_presence(false);assert(get32(2,kAudioDevicePropertyDeviceIsAlive,kAudioObjectPropertyScopeGlobal)==0);
     assert(ftu_live_destroy(live_handle())==0);puts("HAL boundary tests passed");return 0;
 }

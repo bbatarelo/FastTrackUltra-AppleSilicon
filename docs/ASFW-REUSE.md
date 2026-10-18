@@ -295,3 +295,52 @@ headroom for an audio latency improvement. These are FTU-derived follow-up
 methods inspired by the ownership/measurement approach above; they do not claim
 that ASFW implements this IOKit observation scheme or that E-MU needs the same
 constants. E-MU's API, ownership and measurements must be assessed on their own.
+
+
+The [FTU observation candidate](DELIVERY-OBSERVATION.md) makes these follow-up
+methods concrete for a later E-MU audit:
+
+- Separate startup, steady completions, admissions and shutdown drain in
+  statistics; an aborted drain must not replace the worst steady record.
+- Retain both prerequisites for a new OUT submission: the recycled output slot
+  and the input feedback generation. Correlate each with its actual delivery
+  invocation rather than assuming one is the bottleneck.
+- Treat the observer as part of the experiment. Record sampler windows and
+  failures, qualify overhead on hardware, and distinguish average worker CPU
+  from per-block elapsed time or scheduler guarantees.
+- Read both basic and time-constraint policy with API status/default flags.
+  A successful policy request or matching saved parameters do not establish
+  uninterrupted realtime scheduling.
+
+These FTU diagnostics have passed offline checks, the physical buffer sweep and
+two ten-minute duplex sessions. They are candidates for E-MU's own investigation, not claims about ASFW's implementation,
+a proven cause of E-MU latency, or a change to E-MU source.
+
+The first hardware use of that correlation caught a useful example in the
+128-frame FTU run: input pump 2586 lasted 13.277 ms; the following output pump
+2587 lasted only 0.021 ms, yet its packet-to-callback interval was 8.650 ms.
+The two completions carry the same last-packet timestamp. Looking only at the
+output callback's short pump would miss the delay accumulated before its entry.
+At the corresponding worst OUT admission, PCM preparation took 0.112 ms and
+submission 0.172 ms; lead reached the unchanged 16 ms gate without steady loss.
+The retained sampler window did not overlap that tail. The underlying wait or
+descheduling cause is unresolved.
+
+For E-MU, preserve actual callback/pump association and adjacent prerequisite
+records before interpreting a short dispatch call as prompt completion delivery.
+This is measured FTU evidence from the [observation sweep](DELIVERY-OBSERVATION.md),
+not an E-MU result or evidence that a particular ASFW implementation caused or
+solves the delay. Both ten-minute FTU sessions subsequently passed with unchanged
+latency and zero steady losses. Their OUT packet-to-callback p99 falls in the
+[0.512, 1) ms bucket, but maxima reached 4.772 and 4.371 ms. Keep distributions
+alongside worst examples; separate whole-worker CPU from observer overhead and
+retain sampler-overlap counts. The owner also confirmed all five left/right
+tone pairs clean on this candidate.
+
+The [standalone Mach-message study](RUNLOOP-STUDY.md) adds a transport-independent
+control for a later E-MU investigation: retain sender lateness separately from
+delivery delay and include pump calls that deliver no completion. Its 12,000
+messages show that a long whole pump can coexist with prompt message delivery.
+Before/after-wait observations can locate elapsed time but cannot identify when
+a USB completion became ready in the kernel. This is FTU follow-up methodology,
+not ASFW implementation reuse or evidence of an E-MU fault.

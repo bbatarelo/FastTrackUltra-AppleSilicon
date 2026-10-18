@@ -9,7 +9,7 @@ BUILD = build
 CAPTURE = capture.c duplex.c
 RUST_LIB = ../../target/release/libftu_stream.a
 RUST_SOURCES = $(shell find ../../rust -type f \( -name '*.rs' -o -name Cargo.toml \)) ../../Cargo.toml ../../Cargo.lock
-CAPTURE_HEADERS = capture.h capture_model.h capture_profile.h feedback_profile.h pcm.h duplex.h ../../shared/ftu_native.h
+CAPTURE_HEADERS = capture.h capture_model.h capture_profile.h feedback_profile.h pcm.h duplex.h ../../shared/ftu_native.h ../../shared/ftu_live.h
 
 .PHONY: all test sanitize clean rust-test
 FIXTURE = ../../tests/fixtures/descriptors/ultra-config-0.bin
@@ -77,7 +77,7 @@ rust-test: $(RUST_LIB) | $(BUILD)
 	$(BUILD)/test_profile_rust $(FIXTURE)
 	$(BUILD)/test_feedback_rust $(FIXTURE)
 
-$(BUILD)/test_pool_native: test_pool_native.c duplex.c duplex.h ../../shared/ftu_native.h $(RUST_LIB) | $(BUILD)
+$(BUILD)/test_pool_native: test_pool_native.c duplex.c duplex.h ../../shared/ftu_native.h ../../shared/ftu_live.h $(RUST_LIB) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ test_pool_native.c $(RUST_LIB) $(LDLIBS) -framework Security -liconv
 
 .PHONY: sanitize-native

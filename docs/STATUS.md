@@ -1,119 +1,130 @@
 # Current status
 
-As of 18 October 2026, **`dev-8387395854108015` is installed and verified loaded**
-on the desktop Fast Track Ultra, Apple Silicon, macOS 26.7.1. This
-[output-safety reduction](PLACEMENT-MODEL.md) passed thirteen physical loopback
-runs, two silent two-client scenarios and the owner's five-pair output-1/2
-listening check. It subsequently passed [two ten-minute duplex runs and a
-GarageBand playback/recording transition sequence](LONG-SESSION.md). The installed
-binary matches the frozen bundle; current source uses the same driver
-configuration. The later diagnostic-only changes affect future build identities.
+As of 19 October 2026, observation candidate **`dev-b683adc88b54ab87` is installed
+and verified loaded** on the desktop Fast Track Ultra, Apple Silicon, macOS
+26.7.1. Its 13 isolated short runs and two ten-minute duplex sessions passed
+with unchanged latency and zero steady audio losses. The five-pair tone test
+also passed its instrument checks, and **the owner confirmed all five pairs
+clean and correctly routed**. This qualifies the observation checkpoint for the
+bounded tests described here.
 
-Native 48 kHz, four 8 ms USB slots per direction and input safety 1024 are
-unchanged. Output safety is now **2560 frames**, down from 3072. Raw round trip
-measured **78.539 ms at a 64-frame buffer**, about 10.67 ms less than the preceding
-qualified build. Monitoring latency remains high.
+This candidate adds read-only completion-delivery diagnostics. Native 48 kHz,
+four 8 ms USB slots per direction, input/output safety 1024/2560, the 3072-frame
+PCM offset and scheduling policy are unchanged. The short sweep reached the
+unchanged **16 ms submission-lead gate exactly**; these results do not justify
+reducing it. Monitoring latency remains high.
 
-## Measured behavior
+## Latest measured behavior
 
-The physical sweep used rear output 3 → rear input 4, channel 4 Rear: one silence
-preflight and two independent starts at each buffer size. All 24 chirps passed.
-All 29,438 recorded callbacks had the requested frame count and the expected
-output-minus-input sample distance, `2 * buffer + 1024 + 2560`.
+The [observation qualification](DELIVERY-OBSERVATION.md) used rear output 3 →
+rear input 4, channel 4 Rear. It covered one silence preflight, two independent
+starts at each buffer size and ten-minute sessions at 64 and 512 frames.
+All **264 chirps and 530,438 callbacks** passed the signal, geometry and timing
+checks. Each run stopped cleanly and restored the 512-frame buffer.
 
 | Actual buffer | Raw round trip |
 |---:|---:|
 | 64 | 78.539 ms |
 | 128 | 81.206 ms |
 | 256 | 86.539 ms |
-| 512 | 97.206–97.227 ms |
+| 512 | 97.206 ms |
 | 1024 | 118.539 ms |
 | 4096 | 246.539 ms |
 
-Timestamps remained continuous, steady input/output misses stayed zero, and
-every run stopped cleanly and restored 512 frames. Startup playback-miss counts
-remain nonzero and are retained; zero steady loss does not mean zero lifetime
-misses. The roughly 1.206–1.227 ms timestamp-relative remainder is not calibrated
-converter delay or application monitoring latency.
+Steady input/output loss remained zero. Startup playback-miss counts remain
+nonzero and are preserved; zero steady loss does not mean zero lifetime misses.
+The roughly 1.206 ms timestamp-relative remainder is not calibrated converter
+delay or application monitoring latency.
 
-The silent A → A+B → B checks passed at 64 and 4096 frames. The owner heard all
-five lower-left/higher-right tone pairs cleanly at 512 frames. Across the sweep,
-two-client checks and listening, the recorder observed **39,687** transfer
-admissions with no dropped observations or attention events below 16 ms.
-Minimum OUT post-submit lead was **22 ms**, exceeding the predeclared 16 ms gate.
-The additional availability screen retained at least **150 frames** after
-reserving one client buffer plus a maximum-size USB block; this is a heuristic,
-not proof of contiguous sample coverage.
+Across the isolated sweep and longer runs, the recorder retained 326,574 transfer
+completions and the same number of admissions, plus 1,332 worker samples.
+No dropped/invalid/overflowed observations, unmatched steady pumps, sampler
+errors or sampled policy changes were found. Minimum OUT lead was 16 ms in the
+short sweep, 19 ms in the long 64-frame run and 20 ms at 512 frames. The additional
+availability screen retained at least 151 frames; this heuristic does not prove
+contiguous sample coverage.
 
-The longer qualification retained 240 chirps and 506,250 callbacks across two
-ten-minute runs at 64 and 512 frames, with unchanged latency and zero steady
-losses. Minimum submission lead reached **17 ms**, only 1 ms above the same
-16 ms gate. GarageBand then completed over five minutes of cycle playback,
-recorded all 36 chirps from a three-minute shared stimulus, and passed
-play/stop/seek/save/close/reopen/quit checks. Its saved 216-second take passed
-signal/spacing analysis. The owner was away, so this is measured evidence,
-not an additional listening pass. See the [full results and limits](LONG-SESSION.md).
+The new correlation caught an input callback pump lasting 13.277 ms, followed
+by a 0.021 ms output pump whose packet-to-callback interval was still 8.650 ms.
+A short callback pump does not establish prompt delivery. The underlying native
+wait/descheduling cause remains unresolved. The [full report](DELIVERY-OBSERVATION.md)
+includes distributions, sampler cost and interpretation limits.
+
+Normal Mac playback and alerts were temporarily routed to built-in speakers
+during the isolated tests; both saved selections were restored and verified.
+The tone test used outputs 1/2 at 512 frames, with 1,133 callbacks, no reported
+gaps, no steady losses and at least 23 ms OUT lead. The owner independently
+confirmed all five pairs clean and correctly routed.
 
 ## Scope and remaining limits
 
-| Area | Verified behavior | Remaining limits |
+| Area | Evidence | Remaining limits |
 |---|---|---|
 | Desktop Ultra | Native 48 kHz, eight Float32 inputs/outputs published | More units/Macs/OS versions and all-channel tests |
 | Ultra 8R | Product ID recognized by shared driver | Hardware not tested |
-| Playback | Current build: owner-confirmed output-1/2 tones, two ten-minute output-3 duplex tests, over five minutes GarageBand cycling | Longer music/listening sessions and other outputs |
-| Recording | Current build: two ten-minute input-4 captures and 36 chirps retained in a 216-second GarageBand take | Other inputs; input-3 same-channel loop saturation unresolved |
-| Buffers | Current build: two loopback starts each at actual 64–4096 frames | External minimum 15 differs from declared 64; below 64 unqualified |
-| Latency | Current build: 78.539 ms at 64 frames | Still high for monitoring |
-| Two clients | Current build: silent A → A+B → B at 64 and 4096; three-minute shared GarageBand recording; clean final stop | More client combinations and longer sessions |
-| Applications | Current build: measured GarageBand cycling, recording and transport/project transitions; earlier VLC/Spotify owner reports retained | Earlier unclassified 128-frame transition loss remains unexplained; more DAWs |
+| Playback | Current candidate: two ten-minute output-3 duplex tests and owner-confirmed clean output-1/2 tones | Longer music sessions and other outputs |
+| Recording | Current candidate: two ten-minute input-4 captures; prior qualified build: 216-second GarageBand take with all 36 chirps | Other inputs; input-3 same-channel loop saturation unresolved |
+| Buffers | Current candidate: two loopback starts each at actual 64–4096 frames | External minimum 15 differs from declared 64; below 64 unqualified |
+| Latency | Current candidate: 78.539 ms at 64 frames | Still high for monitoring |
+| Two clients | Prior qualified build: silent A → A+B → B at 64/4096 and shared GarageBand recording | Not repeated on this instrumentation candidate; more client combinations |
+| Applications | Prior qualified build: measured GarageBand cycling, recording and transport/project transitions; earlier VLC/Spotify owner reports | Earlier unclassified 128-frame transition loss remains unexplained; more DAWs |
 | MIDI | Planned | System handling and bidirectional CoreMIDI behavior unqualified |
 | Mixer/DSP | Audio uses existing hardware configuration | Effective control read-back, routing app and effects unqualified |
-| Install/package | Current installation and earlier checkpoint rollback verified by loaded identity and installed hash | Fresh-Mac setup and live `.pkg` installation remain untested |
+| Install/package | Current install verified by loaded identity and installed hash; earlier checkpoint rollback verified | Fresh-Mac setup and live `.pkg` installation remain untested |
 
-After this installation, the first read-only device-enumeration query timed out
-at 15 seconds while CoreAudio showed high CPU use. A later query completed,
-reported the correct idle build, and daemon CPU settled before the first audio
-test. The sampled client was waiting in CoreAudio system-object initialization.
-The cause is unresolved; this does not establish either a driver fault or an OS
-fault. Diagnostics and the original timeout are retained. Restart/startup
-reliability remains work to qualify.
+After this installation, two read-only enumeration queries timed out while
+CoreAudio showed high CPU. The same daemon later recovered without another
+restart. Its later stack sample showed mostly waiting and does not identify
+the earlier busy code. Exact recovery time and cause remain unknown. A similar
+shorter timeout occurred with the prior build. Restart/startup reliability
+remains unqualified; neither driver nor OS causation is established.
+
+An early 64-frame attempt passed its audio checks but was rejected because
+Chrome opened a new epoch between diagnostic readbacks. That attempt and the
+startup failures remain alongside the fresh isolated suite, rather than being
+overwritten or counted as passes.
 
 ## Preserved checkpoints and next work
 
-The preceding four-slot `dev-517459af36927152` (output safety 3072) remains the
-exact rollback target, with its successful [worker-timing checks](WORKER-TIMING.md)
-preserved. The older `dev-2820c37b9ed14d39` also remains available. The rejected
-three-slot `dev-a70335afdd0f3a22` is still rejected: one run reached 6 ms against
-its predeclared 8 ms gate. None of its seven attempts was replaced. See
-[the queue experiment](QUEUE-MODEL.md).
+The preceding qualified checkpoint and exact rollback remains
+**`dev-8387395854108015`**, frozen under
+`build/candidates/output-safety-2560-20261018/`. Its
+[output-safety reduction](PLACEMENT-MODEL.md) passed thirteen loopback runs,
+two silent two-client scenarios and owner listening, then
+[two ten-minute duplex runs and GarageBand transitions](LONG-SESSION.md).
+Its original summaries retain their historical scope and pending states.
 
-The current bundle and all 36 source inputs are frozen under
-`build/candidates/output-safety-2560-20261018/`; hardware evidence is under
-`build/trials/2026-10-18-output-safety-2560/`. The final
-`qualification-checkpoint.json` records the subsequent lifecycle and listening
-success; the immutable sweep-only summary retains their earlier pending status.
-Offline checks passed 116 Rust tests, six placement-model tests, four transport-
-model tests, HAL/native/callback sanitizer checks, 18 Python tests, Clippy and
-bundle validation. Claude independently reviewed the design and new model.
+The current observation bundle and all 37 source inputs are frozen under
+`build/candidates/delivery-observation-20261018/`; evidence is under
+`build/trials/2026-10-18-delivery-observation/`. The later
+`qualification-checkpoint.json` records the hardware outcome separately from
+the immutable pre-install plan. All source hashes and the installed binary
+still match the frozen candidate. The offline investigation is committed as
+`67286e5`. The subsequent repository checkpoint includes the qualified
+instrumentation, hardware results and standalone run-loop control study.
 
-Next: implement the measurements specified by the
-[offline completion study](COMPLETION-STUDY.md): link each callback to its actual
-run-loop invocation, collect bounded timing histograms and measure worker CPU
-cost/effective policy. The retained worst OUT events spent 6.465–7.351 ms before
-callback delivery and 0.305–0.360 ms from callback to resubmission observation.
-Those selected records are not a full distribution or a scheduling bound.
-Shorter batches alone leave modeled RTL unchanged at the current offsets, and
-no new driver candidate is selected. Keep current margins and resolve native
-visibility/ownership before early frame-list access. Extend production-pool and
-drift coverage before further safety reductions. The
-[ASFW comparison](ASFW-REUSE.md) records methods to evaluate later in E-MU; no E-MU
-source has changed.
+Older checkpoints `dev-517459af36927152` and `dev-2820c37b9ed14d39` remain
+preserved. The three-slot `dev-a70335afdd0f3a22` remains rejected: one run reached
+6 ms against its predeclared 8 ms gate. See [the queue experiment](QUEUE-MODEL.md).
 
-Only native 48 kHz is supported. Earlier VLC/GarageBand 44.1 kHz sessions exercised
-application conversion. Other rates, clock modes, MIDI, hotplug/sleep/wake,
-automatic recovery and multiple Ultras are roadmap work. These bounded tests
-cover one unit and Mac; they do not establish a reliability guarantee or a
-per-version macOS compatibility matrix.
+The [standalone run-loop control](RUNLOOP-STUDY.md) subsequently passed 12 runs
+and 12,000 synthetic messages without touching USB or audio. It confirms that
+whole-pump duration must be separated from delivery delay; it does not identify
+the USB cause. Two subsequent 20-second no-producer controls also showed timeout
+overshoot under both scheduling policies. Next, record all real worker pumps,
+including no-callback timeouts, with wait observers optional. That follow-up
+candidate is not yet implemented; no margin is reduced.
+The [offline completion study](COMPLETION-STUDY.md) shows that shorter batches
+alone leave modeled RTL unchanged at current offsets. Resolve native
+visibility/ownership before early frame-list access, and extend production-pool,
+drift and lifecycle coverage before another safety reduction. The
+[ASFW comparison](ASFW-REUSE.md) records concrete methods for a later E-MU audit;
+no E-MU source has changed.
+
+Only native 48 kHz is supported. Earlier 44.1 kHz application sessions exercised
+conversion. Other rates, clock modes, MIDI, hotplug/sleep/wake, automatic recovery
+and multiple Ultras are roadmap work. These bounded tests cover one unit and
+Mac; they do not establish a reliability guarantee or compatibility matrix.
 
 See [ROADMAP.md](ROADMAP.md) for priorities and [PROVENANCE.md](PROVENANCE.md)
 for archive identity and extraction scope.

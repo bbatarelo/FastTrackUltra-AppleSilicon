@@ -16,6 +16,8 @@
 | [Sample placement and safety reduction](PLACEMENT-MODEL.md) | Understanding physical latency, the independent model and the qualified four-slot 2560 reduction |
 | [Longer sessions and app transitions](LONG-SESSION.md) | Reviewing the ten-minute duplex runs, GarageBand cycle/recording checks and preserved evidence |
 | [Completion delivery study](COMPLETION-STUDY.md) | Reviewing linked timing evidence, shorter-transfer models and the next observation plan |
+| [Completion-delivery observations](DELIVERY-OBSERVATION.md) | Reviewing the observation-only candidate, measurement semantics and completed hardware results |
+| [Run-loop control study](RUNLOOP-STUDY.md) | Separating whole-pump duration from synthetic message delivery and planning wait observations |
 | [ASFireWire lessons](ASFW-REUSE.md) | Evaluating timing, ownership and measurement methods |
 | [Diagnostics](../tools/README.md) | Choosing a read-only inspector or an explicit hardware experiment |
 | [Packaging](PACKAGING.md) | Preparing installers and future signed/notarized releases |

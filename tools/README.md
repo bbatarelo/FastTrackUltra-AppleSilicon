@@ -4,6 +4,7 @@
 |---|---|---|
 | `make check` / `build/hal-check` | Loaded build, device geometry and health | No, without explicit tone/silence options |
 | [`build/hal-check --worker-timing`](../docs/WORKER-TIMING.md) | Read coherent, sample-free USB-worker stage records when `ftuW` is available | No |
+| [`build/hal-check --delivery`](../docs/DELIVERY-OBSERVATION.md) | Read sample-free completion histograms, callback/pump links and worker CPU/policy observations when `ftuD` is available | No |
 | `build/hal-check --timing` | Read-only playback/capture margins when the installed build exposes `ftuT` | No |
 | `build/hal-scenarios` | Bounded buffer/read-back and multi-client experiments | Yes, silent streaming |
 | [`hal-loopback`](hal-loopback/README.md) | Output 3 → selected input 3/4; raw/timestamp RTL and actual callbacks | Yes, explicit prepared run; saves selected input |
@@ -29,3 +30,8 @@ to the frozen archive, not an active second driver branch.
 For bounded ten-minute physical sessions and continuously sampled GarageBand
 transitions, see the [extended loopback tools](hal-loopback/README.md#extended-sessions-and-application-transitions).
 These are external clients/observers; building them does not replace the driver.
+
+The [standalone run-loop study](runloop-study/README.md) compares two-port Mach
+message delivery with normal/requested realtime scheduling and optional wait
+observers. It does not access USB, audio or the driver. Its results are a control
+experiment, not hardware qualification.

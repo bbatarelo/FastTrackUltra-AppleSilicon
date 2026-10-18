@@ -96,6 +96,7 @@ struct Shared {
     calls: AtomicUsize,
     timing: Timing,
     worker_timing: WorkerTiming,
+    delivery: crate::worker_delivery::Delivery,
     capture: Timeline,
     playback: Timeline,
     clock: PublishedClock,
@@ -123,6 +124,7 @@ impl Shared {
             calls: AtomicUsize::new(0),
             timing: Timing::new(),
             worker_timing: WorkerTiming::new(),
+            delivery: crate::worker_delivery::Delivery::new(),
             capture: Timeline::new(),
             playback: Timeline::new(),
             clock: PublishedClock::new(),
@@ -161,6 +163,7 @@ impl Shared {
         self.clock.publish(None);
         self.timing.reset(epoch);
         self.worker_timing.reset(epoch);
+        self.delivery.reset(epoch);
         self.epoch.store(epoch, SeqCst);
         self.stop.store(false, SeqCst);
         for a in [
@@ -251,9 +254,32 @@ impl StreamIo for AudioIo {
     fn worker_timing(&self) -> bool {
         true
     }
-    fn worker_event(&mut self, mut event: WorkerEvent) {
+    fn worker_event(&mut self, mut event: WorkerEvent, pump: Pump, feedback_pump: Pump) {
         event.captured = self.shared.captured.load(SeqCst);
         self.shared.worker_timing.observe(event);
+        self.shared.delivery.admission(event, pump, feedback_pump);
+    }
+    fn worker_completion(
+        &mut self,
+        d: usize,
+        slot: usize,
+        flight: crate::pool::Flight,
+        c: &crate::pool::PoolCompletion,
+        consumed: u64,
+        draining: bool,
+    ) {
+        self.shared.delivery.completion(
+            d,
+            slot,
+            flight,
+            c,
+            consumed,
+            self.shared.captured.load(SeqCst),
+            draining,
+        );
+    }
+    fn worker_sample(&mut self, s: WorkerSample) {
+        self.shared.delivery.sample(s);
     }
     fn submission_timing(&self) -> bool {
         true
@@ -486,6 +512,9 @@ unsafe fn worker(shared: Arc<Shared>, factory: Factory, product: u32, location: 
         shared
             .worker_timing
             .configure(info.timebase_numer, info.timebase_denom, LIVE_QUEUE_DEPTH);
+        shared
+            .delivery
+            .configure(info.timebase_numer, info.timebase_denom);
         session = PoolSession::with_depth(epoch, info, LIVE_QUEUE_DEPTH);
         if (ops.base.prepare)(ctx, session.queue_depth() as u32) != 0 {
             session.stop("prepare_failed");
@@ -915,6 +944,16 @@ pub unsafe extern "C" fn ftu_live_destroy(handle: *mut Live) -> i32 {
     }
     drop(Box::from_raw(handle));
     0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ftu_live_delivery(
+    handle: *mut Live,
+    out: *mut crate::worker_delivery::Snapshot,
+) {
+    if let (Some(h), Some(out)) = (handle.as_ref(), out.as_mut()) {
+        *out = h.shared.delivery.snapshot();
+    }
 }
 
 #[cfg(test)]

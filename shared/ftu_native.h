@@ -50,12 +50,22 @@ int32_t ftu_duplex_run(const struct ftu_native_ops *, void *, const char *,
  * Each successful submit owes exactly one completion with the same ticket.
  * Reuse only after consuming a matched completion; never reuse a pending slot.
  * All calls and callback dispatch are on the same thread. */
-struct ftu_pool_completion { uint64_t ticket; struct ftu_completion result; };
+/* Private pool ABI v2: callback-linked pump metadata, never an ownership grant. */
+struct ftu_pump { uint64_t id, enter_ticks, exit_ticks, result, sample_begin_ticks, sample_end_ticks; };
+struct ftu_worker_sample {
+    uint64_t begin_ticks, end_ticks, cpu_user_ns, cpu_system_ns;
+    uint64_t cpu_status, policy_status, policy_default;
+    uint64_t period_ticks, computation_ticks, constraint_ticks, preemptible, basic_policy;
+};
+struct ftu_pool_completion { uint64_t ticket; struct ftu_completion result; struct ftu_pump pump; };
 struct ftu_pool_ops {
     struct ftu_native_ops base;
     int32_t (*submit)(void *, uint32_t, uint32_t, uint64_t ticket, uint64_t frame, const uint16_t *);
     int32_t (*completion)(void *, uint32_t, uint32_t, struct ftu_pool_completion *);
     uint64_t (*now_ticks)(void *);
+    /* Optional read-only sampler, called outside callbacks at most once/second
+     * plus initial/final samples. Failures are telemetry, not transport errors. */
+    void (*worker_sample)(void *, struct ftu_worker_sample *);
 };
 int32_t ftu_stream_run(const struct ftu_pool_ops *, void *, const char *,
                       uint32_t duration_ms, uint32_t tone, uint64_t epoch, const volatile int32_t *stop);

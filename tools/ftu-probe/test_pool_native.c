@@ -35,6 +35,45 @@ static void three_slot_native_boundary(void)
     }
     pool_context=NULL;
 }
+
+static void dispatch_saved(void *info) {(void)info;saved_cb(saved_ref,0,saved_frames);}
+static void callback_pump_link(void)
+{
+    struct native c={0};c.count=4;c.pool_mode=true;pool_context=&c;
+    IOUSBInterfaceInterface300 table={0};table.LowLatencyWriteIsochPipeAsync=fake_submit;
+    IOUSBInterfaceInterface300 *ptr=&table;c.ep[1].intf=&ptr;c.ep[1].pipe=1;
+    c.ep[1].data=calloc(4,FTU_BLOCK_BYTES);c.ep[1].frames=calloc(4*FTU_ENTRIES,sizeof *c.ep[1].frames);
+    struct block *b=&c.ep[1].blocks[0];b->owner=&c;b->direction=1;b->index=0;
+    CFRunLoopSourceContext sc={0};sc.perform=dispatch_saved;
+    CFRunLoopSourceRef source=CFRunLoopSourceCreate(NULL,0,&sc);assert(source);
+    CFRunLoopAddSource(CFRunLoopGetCurrent(),source,kCFRunLoopDefaultMode);
+    uint16_t lengths[FTU_ENTRIES];for(unsigned i=0;i<FTU_ENTRIES;i++)lengths[i]=144;
+    assert(pool_submit(&c,1,0,1,100,lengths)==0);
+    CFRunLoopSourceSignal(source);pump(&c);
+    assert(b->pump.id==1 && b->pump.enter_ticks<=b->callback_ticks && b->callback_ticks<=b->pump.exit_ticks);
+    assert(b->pump.result==kCFRunLoopRunHandledSource);
+    struct ftu_pump original=b->pump;
+    pump(&c);assert(c.pump_id==2);
+    struct ftu_pool_completion done={0};assert(pool_completion(&c,1,0,&done)==1);
+    assert(memcmp(&done.pump,&original,sizeof original)==0);
+    assert(pool_submit(&c,1,0,2,108,lengths)==0);
+    /* Out-of-pump completion cannot inherit an earlier generation's link. */
+    saved_cb(saved_ref,0,saved_frames);assert(pool_completion(&c,1,0,&done)==1);
+    assert(done.pump.id==0 && done.pump.exit_ticks==0);
+    c.pump_id=UINT64_MAX-1;
+    assert(pool_submit(&c,1,0,3,116,lengths)==0);CFRunLoopSourceSignal(source);pump(&c);
+    assert(pool_completion(&c,1,0,&done)==1 && done.pump.id==0);
+    struct ftu_worker_sample a,b_sample;worker_sample(&c,&a);worker_sample(&c,&b_sample);
+    assert(!a.cpu_status && !b_sample.cpu_status && !a.policy_status);
+    assert(a.end_ticks>=a.begin_ticks && b_sample.begin_ticks>=a.end_ticks);
+    assert(b_sample.cpu_user_ns>=a.cpu_user_ns && b_sample.cpu_system_ns>=a.cpu_system_ns);
+    mach_timebase_info_data_t tb;assert(mach_timebase_info(&tb)==0);
+    uint64_t sum=0,max=0;
+    for(unsigned i=0;i<100;i++){worker_sample(&c,&a);uint64_t ns=(a.end_ticks-a.begin_ticks)*tb.numer/tb.denom;sum+=ns;if(ns>max)max=ns;}
+    printf("native sampler test-thread mean_ns=%llu max_ns=%llu (100 samples; no audio)\n",(unsigned long long)(sum/100),(unsigned long long)max);
+    CFRunLoopRemoveSource(CFRunLoopGetCurrent(),source,kCFRunLoopDefaultMode);CFRelease(source);
+    free(c.ep[1].data);free(c.ep[1].frames);pool_context=NULL;
+}
 int main(void)
 {
     struct native c={0};c.count=4;c.pool_mode=true;pool_context=&c;
@@ -73,5 +112,6 @@ int main(void)
     free(c.ep[0].data);free(c.ep[0].frames);
     pool_context=NULL;free(c.ep[1].data);free(c.ep[1].frames);
     three_slot_native_boundary();
+    callback_pump_link();
     puts("native reusable callback identity: passed");return 0;
 }

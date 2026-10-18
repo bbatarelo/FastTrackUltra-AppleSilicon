@@ -57,6 +57,24 @@ struct ftu_worker_snapshot {
 };
 void ftu_live_worker_timing(struct ftu_live *, struct ftu_worker_snapshot *);
 
+/* ftuD delivery v1. Fixed word layouts are documented in DELIVERY-OBSERVATION.md.
+ * ns histogram limits are exclusive; threshold counters use >=. No samples. */
+#define FTU_DELIVERY_HEADER 28
+#define FTU_DELIVERY_METRICS 8
+#define FTU_DELIVERY_BUCKETS 18
+#define FTU_DELIVERY_HIST 29
+#define FTU_DELIVERY_RECORD 18
+#define FTU_DELIVERY_RECENT 8
+#define FTU_DELIVERY_LINK (FTU_WORKER_WORDS+12)
+#define FTU_DELIVERY_SAMPLE 12
+struct ftu_delivery_snapshot {
+    uint64_t header[FTU_DELIVERY_HEADER];
+    uint64_t metrics[2][FTU_DELIVERY_METRICS][FTU_DELIVERY_HIST];
+    uint64_t worst[2][FTU_DELIVERY_RECORD], recent[FTU_DELIVERY_RECENT][FTU_DELIVERY_RECORD];
+    uint64_t lead[2][FTU_DELIVERY_LINK], samples[2][FTU_DELIVERY_SAMPLE];
+};
+void ftu_live_delivery(struct ftu_live *, struct ftu_delivery_snapshot *);
+
 /* phase: 0 idle, 1 starting, 2 running, 3 stopping, 4 fault, 5 quarantined.
  * Quarantine forbids restart and retains uncertain native resources in-process.
  * Startup/stop are control-thread calls; IO/timestamp calls are bounded, with

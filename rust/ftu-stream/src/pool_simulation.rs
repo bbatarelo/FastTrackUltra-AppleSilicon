@@ -255,6 +255,7 @@ unsafe extern "C" fn completion(
             t.ticket
         },
         result: c,
+        pump: Pump::default(),
     };
     1
 }
@@ -328,6 +329,7 @@ const OPS: PoolOps = PoolOps {
     submit,
     completion,
     now_ticks,
+    worker_sample: None,
 };
 fn simulate(fault: u8, count: usize, tone: bool) -> (PoolSession, Fake, [Vec<Trace>; 2], usize) {
     simulate_depth(fault, count, tone, DEPTH)
@@ -664,15 +666,40 @@ fn live_session_start_clients_stop_restart_and_epoch_isolation() {
 
 #[test]
 fn live_journal_recycles_without_duration_storage_or_allocations() {
-    struct Sink(crate::timing::Timing, crate::worker_timing::WorkerTiming);
+    struct Sink(
+        crate::timing::Timing,
+        crate::worker_timing::WorkerTiming,
+        crate::worker_delivery::Delivery,
+    );
 
     impl StreamIo for Sink {
         fn worker_timing(&self) -> bool {
             true
         }
-        fn worker_event(&mut self, mut e: crate::worker_timing::Event) {
+        fn worker_event(
+            &mut self,
+            mut e: crate::worker_timing::Event,
+            _pump: Pump,
+            _feedback_pump: Pump,
+        ) {
             e.captured = 48000;
             self.1.observe(e);
+            self.2.admission(e, _pump, _feedback_pump);
+        }
+        fn worker_completion(
+            &mut self,
+            d: usize,
+            slot: usize,
+            flight: Flight,
+            c: &PoolCompletion,
+            consumed: u64,
+            draining: bool,
+        ) {
+            self.2
+                .completion(d, slot, flight, c, consumed, 48000, draining);
+        }
+        fn worker_sample(&mut self, s: WorkerSample) {
+            self.2.sample(s);
         }
         fn submission_timing(&self) -> bool {
             true
@@ -691,6 +718,16 @@ fn live_journal_recycles_without_duration_storage_or_allocations() {
                 );
             }
         }
+    }
+
+    unsafe extern "C" fn failed_sample(ctx: *mut c_void, out: *mut WorkerSample) {
+        // Deliberately unavailable timestamps: Rust cadence must not trust them.
+        *out = WorkerSample {
+            cpu_status: 7,
+            policy_status: 8,
+            ..WorkerSample::default()
+        };
+        let _ = ctx;
     }
     let mut signal = 0;
     let mut f = Fake::new(0, &mut signal, 10000);
@@ -713,16 +750,23 @@ fn live_journal_recycles_without_duration_storage_or_allocations() {
         records: &mut records,
         recycle: true,
     };
+    let sampled_ops = PoolOps {
+        worker_sample: Some(failed_sample),
+        ..OPS
+    };
     let mut sink = Sink(
         crate::timing::Timing::new(),
         crate::worker_timing::WorkerTiming::new(),
+        crate::worker_delivery::Delivery::new(),
     );
+    sink.2.reset(1);
+    sink.2.configure(125, 3);
     sink.1.reset(1);
     sink.1.configure(125, 3, crate::geometry::LIVE_QUEUE_DEPTH);
     ALLOCS.with(|v| v.set(0));
     TRACK.with(|v| v.set(true));
     unsafe {
-        s.run_with(&OPS, ctx, &mut journal, &mut sink, None, &|| {
+        s.run_with(&sampled_ops, ctx, &mut journal, &mut sink, None, &|| {
             fake(ctx).cap_delivered >= 5000
         });
         s.drain_with(&OPS, ctx, &mut journal, &mut sink);
@@ -744,6 +788,23 @@ fn live_journal_recycles_without_duration_storage_or_allocations() {
     assert_eq!(returned.count, check.count);
     assert!(returned.min > 1);
     assert_eq!(returned.dropped, 0);
+    let delivery = sink.2.snapshot();
+    assert!(
+        (40..=43).contains(&delivery.header[17]),
+        "sampler cadence must survive bad telemetry"
+    );
+    assert_eq!(delivery.header[18], delivery.header[17]);
+    assert_eq!(delivery.header[21], delivery.header[17]);
+    assert_eq!(delivery.header[1], 1);
+    assert_eq!(delivery.header[14], 0);
+    for d in 0..2 {
+        assert_eq!(delivery.header[6 + d], s.completed[d] as u64);
+        assert_eq!(delivery.header[10 + d], s.next[d] as u64);
+        assert_eq!(
+            delivery.metrics[d][1][0] + delivery.header[24 + d],
+            s.completed[d] as u64
+        );
+    }
     let worker = sink.1.snapshot();
     assert_eq!(worker.valid, 1);
     assert_eq!(worker.dropped, 0);
@@ -945,7 +1006,7 @@ fn worker_events_separate_delivery_consumption_preparation_and_submission() {
         fn worker_timing(&self) -> bool {
             true
         }
-        fn worker_event(&mut self, e: Event) {
+        fn worker_event(&mut self, e: Event, _pump: Pump, _feedback_pump: Pump) {
             self.events[self.count] = e;
             self.count += 1;
         }

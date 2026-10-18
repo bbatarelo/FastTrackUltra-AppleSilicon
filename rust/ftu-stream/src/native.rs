@@ -96,3 +96,49 @@ mod tests {
         assert_eq!(std::mem::size_of::<Clock>(), 16);
     }
 }
+
+// Metadata only; id=0 means callback-to-pump association unavailable.
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Pump {
+    pub id: u64,
+    pub enter_ticks: u64,
+    pub exit_ticks: u64,
+    pub result: u64,
+    pub sample_begin_ticks: u64,
+    pub sample_end_ticks: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct WorkerSample {
+    pub begin_ticks: u64,
+    pub end_ticks: u64,
+    pub cpu_user_ns: u64,
+    pub cpu_system_ns: u64,
+    pub cpu_status: u64,
+    pub policy_status: u64,
+    pub policy_default: u64,
+    pub period_ticks: u64,
+    pub computation_ticks: u64,
+    pub constraint_ticks: u64,
+    pub preemptible: u64,
+    pub basic_policy: u64,
+}
+impl WorkerSample {
+    pub fn words(self) -> [u64; 12] {
+        [
+            self.begin_ticks,
+            self.end_ticks,
+            self.cpu_user_ns,
+            self.cpu_system_ns,
+            self.cpu_status,
+            self.policy_status,
+            self.policy_default,
+            self.period_ticks,
+            self.computation_ticks,
+            self.constraint_ticks,
+            self.preemptible,
+            self.basic_policy,
+        ]
+    }
+}

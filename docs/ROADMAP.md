@@ -22,9 +22,10 @@ The [three-slot outcome](QUEUE-MODEL.md) preserves all seven attempts, the
 10.667 ms further reduction and its separate failed headroom check. The roughly
 1.206 ms timestamp remainder excludes scheduling and is not monitoring latency.
 
-- Keep the current `dev-8387395854108015`, its exact rollback
-  `dev-517459af36927152`, and preceding `dev-2820c37b9ed14d39` preserved.
-  Short qualification does not establish long-session application stability.
+- Keep the qualified observation checkpoint `dev-b683adc88b54ab87` and its
+  exact rollback `dev-8387395854108015` preserved, along with earlier
+  `dev-517459af36927152` and `dev-2820c37b9ed14d39`. Bounded qualification
+  does not establish general long-session application stability.
 - Use the qualified [bounded worker observations](WORKER-TIMING.md) to investigate
   completion delivery and worker scheduling. The four-slot build passed 13
   physical runs, two-client checks and owner listening, with latency within about
@@ -52,9 +53,21 @@ The [three-slot outcome](QUEUE-MODEL.md) preserves all seven attempts, the
   transport scheduling and the new model adds nominal sample placement. Neither
   establishes architectural parity or measured OS scheduling bounds.
 - Follow the [completion-delivery study](COMPLETION-STUDY.md) before selecting
-  shorter transfers. Add callback-to-pump correlation, bounded full-epoch
-  histograms and worker CPU/policy observations at unchanged geometry. The
-  existing detailed records are selected windows, not scheduling distributions.
+  shorter transfers. The [observation candidate](DELIVERY-OBSERVATION.md) adds
+  callback-to-pump correlation, bounded full-epoch histograms and worker
+  CPU/policy sampling at unchanged geometry. Its 13 isolated short trials and
+  two ten-minute sessions passed with unchanged latency; tone instrument checks
+  and owner listening passed. Minimum lead reached the unchanged
+  16 ms gate exactly. A 13.277 ms input pump preceded a short output pump whose
+  packet-to-callback interval was still 8.650 ms. Investigate native delivery
+  and owner scheduling before changing policy or margins. The new histograms
+  describe event-conditioned distributions, not OS bounds; whole-worker CPU
+  is not isolated observer overhead. Preserve the prior selected-window evidence.
+  The [standalone Mach-message control](RUNLOOP-STUDY.md) passed 12 runs and
+  showed why whole-pump duration is insufficient. Timeout-only controls also
+  exceeded the requested 2 ms under both policies. Next record all pump returns
+  in the real owner, including no-callback timeouts; add wait observers only as
+  a separate condition if needed. Preserve geometry and the unchanged 16 ms gate.
   In the corrected synthetic envelope, eight 4 ms slots retain 19 ms OUT lead,
   but an additional 4 ms owner stall makes 16/64 phases miss the 16 ms screen.
   Smaller batches alone do not reduce modeled RTL at unchanged offsets.

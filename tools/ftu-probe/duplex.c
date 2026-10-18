@@ -21,6 +21,7 @@ struct block {
     bool used, pending, complete, delivered, matched;
     IOReturn status;
     uint64_t callback_ticks;
+    struct ftu_pump pump;
     uint64_t ticket;
     uintptr_t token;
 };
@@ -39,13 +40,17 @@ struct native {
     unsigned count;
     bool pool_mode;
     struct ftu_info report;
+    uint64_t pump_id, pump_enter, sample_begin, sample_end;
+    bool pumping;
 };
 _Static_assert(sizeof(struct ftu_packet) == 16, "packet ABI");
 _Static_assert(sizeof(struct ftu_completion) == 1040, "completion ABI");
 _Static_assert(sizeof(struct ftu_rates) == 32, "rates ABI");
 _Static_assert(sizeof(struct ftu_info) == 68, "info ABI");
 _Static_assert(sizeof(struct ftu_clock) == 16, "clock ABI");
-_Static_assert(sizeof(struct ftu_pool_completion) == 1048, "pool completion ABI");
+_Static_assert(sizeof(struct ftu_pool_completion) == 1096, "pool completion ABI");
+_Static_assert(sizeof(struct ftu_pump)==48,"pump ABI");
+_Static_assert(sizeof(struct ftu_worker_sample)==96,"worker sample ABI");
 _Static_assert(sizeof(sig_atomic_t) == sizeof(int32_t), "signal ABI");
 static uint64_t absolute_ticks(AbsoluteTime t) { uint64_t r; memcpy(&r,&t,sizeof r); return r; }
 /* The run loop dispatches on this thread. Opaque tokens are never dereferenced
@@ -191,6 +196,8 @@ static void completed(void *refcon,IOReturn status,void *arg0)
     b->status=status;b->matched=arg0==e->frames+b->index*FTU_ENTRIES;
     if(!b->matched)c->report.callback_fault=1;
     b->pending=false;b->complete=true;b->callback_ticks=mach_absolute_time();
+    b->pump=(struct ftu_pump){0};
+    if(c->pumping && c->pump_id)b->pump=(struct ftu_pump){c->pump_id,c->pump_enter,0,0,c->sample_begin,c->sample_end};
 }
 static void pool_completed(void *refcon,IOReturn status,void *arg0)
 {
@@ -238,7 +245,22 @@ static int32_t completion(void *ctx,uint32_t d,uint32_t index,struct ftu_complet
     }
     b->delivered=true;return 1;
 }
-static void pump(void *ctx){(void)ctx;CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.002,true);}
+static void pump(void *ctx)
+{
+    struct native *c=ctx;
+    /* Keep callback identity even when another pump runs before consumption.
+     * On ID exhaustion telemetry becomes unavailable; audio still runs. */
+    if(c->pump_id!=UINT64_MAX)c->pump_id++;
+    c->pumping=c->pump_id!=UINT64_MAX;
+    c->pump_enter=mach_absolute_time();
+    SInt32 result=CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.002,true);
+    uint64_t end=mach_absolute_time();
+    if(c->pumping)for(unsigned d=0;d<2;d++)for(unsigned i=0;i<c->count;i++){
+        struct ftu_pump *p=&c->ep[d].blocks[i].pump;
+        if(p->id==c->pump_id){p->exit_ticks=end;p->result=(uint64_t)result;}
+    }
+    c->pumping=false;
+}
 static int32_t abort_pipe(void *ctx,uint32_t d)
 {
     struct native *c=ctx;if(d>1 || !c->ep[d].pipe)return kIOReturnBadArgument;
@@ -284,8 +306,27 @@ static int32_t pool_completion(void *ctx,uint32_t d,uint32_t slot,struct ftu_poo
 {
     struct native *c=ctx;if(d>1 || slot>=c->count || !out)return -1;
     int32_t r=completion(ctx,d,slot,&out->result);
-    if(r==1)out->ticket=c->ep[d].blocks[slot].ticket;
+    if(r==1){out->ticket=c->ep[d].blocks[slot].ticket;out->pump=c->ep[d].blocks[slot].pump;}
     return r;
+}
+/* Read-only calling-thread sample. No policy setting, USB access or logging.
+ * Both system-call statuses and get_default survive into the diagnostic. */
+static void worker_sample(void *ctx,struct ftu_worker_sample *out)
+{
+    struct native *c=ctx;memset(out,0,sizeof *out);out->begin_ticks=mach_absolute_time();
+    thread_port_t thread=mach_thread_self();
+    thread_basic_info_data_t cpu={0};mach_msg_type_number_t count=THREAD_BASIC_INFO_COUNT;
+    kern_return_t rc=thread_info(thread,THREAD_BASIC_INFO,(thread_info_t)&cpu,&count);
+    if(!rc && (count<THREAD_BASIC_INFO_COUNT || cpu.user_time.seconds<0 || cpu.user_time.microseconds<0 || cpu.user_time.microseconds>=1000000 || cpu.system_time.seconds<0 || cpu.system_time.microseconds<0 || cpu.system_time.microseconds>=1000000))rc=KERN_INVALID_ARGUMENT;
+    out->cpu_status=(uint64_t)(int64_t)rc;
+    if(!rc){out->basic_policy=cpu.policy;out->cpu_user_ns=(uint64_t)cpu.user_time.seconds*1000000000ull+(uint64_t)cpu.user_time.microseconds*1000ull;out->cpu_system_ns=(uint64_t)cpu.system_time.seconds*1000000000ull+(uint64_t)cpu.system_time.microseconds*1000ull;}
+    thread_time_constraint_policy_data_t policy={0};boolean_t defaults=FALSE;count=THREAD_TIME_CONSTRAINT_POLICY_COUNT;
+    rc=thread_policy_get(thread,THREAD_TIME_CONSTRAINT_POLICY,(thread_policy_t)&policy,&count,&defaults);
+    if(!rc && count<THREAD_TIME_CONSTRAINT_POLICY_COUNT)rc=KERN_INVALID_ARGUMENT;
+    out->policy_status=(uint64_t)(int64_t)rc;
+    if(!rc){out->policy_default=defaults;out->period_ticks=policy.period;out->computation_ticks=policy.computation;out->constraint_ticks=policy.constraint;out->preemptible=policy.preemptible;}
+    mach_port_deallocate(mach_task_self(),thread);out->end_ticks=mach_absolute_time();
+    c->sample_begin=out->begin_ticks;c->sample_end=out->end_ticks;
 }
 static uint64_t now_ticks(void *ctx){(void)ctx;return mach_absolute_time();}
 int duplex_run(IOUSBDeviceInterface500 **dev,const char *output,unsigned duration_ms,bool tone,volatile sig_atomic_t *stop)
@@ -305,7 +346,7 @@ int stream_run(IOUSBDeviceInterface500 **dev,const char *output,unsigned duratio
         char path[4096];int n=snprintf(path,sizeof path,"%s/session-%03u",output,cycle+1);
         if(n<0 || (size_t)n>=sizeof path || mkdir(path,0700))return 1;
         struct native *c=calloc(1,sizeof *c);if(!c)return 1;c->dev=dev;c->pool_mode=true;pool_context=c;
-        const struct ftu_pool_ops ops={{config,rates,prepare,activate,bus_clock,buffer,submit,completion,pump,abort_pipe,cleanup,info},pool_submit,pool_completion,now_ticks};
+        const struct ftu_pool_ops ops={{config,rates,prepare,activate,bus_clock,buffer,submit,completion,pump,abort_pipe,cleanup,info},pool_submit,pool_completion,now_ticks,worker_sample};
         int rc=ftu_stream_run(&ops,c,path,duration_ms,tone,cycle+1,(const volatile int32_t *)stop);
         if(rc==4)_Exit(4);
         for(unsigned d=0;d<2;d++)for(unsigned i=0;i<c->count;i++)if(c->ep[d].blocks[i].pending)_Exit(4);
@@ -364,7 +405,7 @@ static void *live_open(uint32_t product,uint32_t location)
     if(!c){(*dev)->Release(dev);return NULL;}
     c->dev=dev;c->pool_mode=true;pool_context=c;return c;
 }
-static const struct ftu_pool_ops live_operations={{config,rates,prepare,activate,bus_clock,buffer,submit,completion,pump,abort_pipe,cleanup,info},pool_submit,pool_completion,now_ticks};
+static const struct ftu_pool_ops live_operations={{config,rates,prepare,activate,bus_clock,buffer,submit,completion,pump,abort_pipe,cleanup,info},pool_submit,pool_completion,now_ticks,worker_sample};
 static const struct ftu_pool_ops *live_ops(void *ctx){return ctx==pool_context?&live_operations:NULL;}
 static int32_t live_close(void *ctx)
 {

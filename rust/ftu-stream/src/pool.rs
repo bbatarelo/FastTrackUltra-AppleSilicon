@@ -17,6 +17,7 @@ pub const FEEDBACK_SLOTS: usize = 32;
 pub struct PoolCompletion {
     pub ticket: u64,
     pub result: Completion,
+    pub pump: Pump,
 }
 #[repr(C)]
 pub struct PoolOps {
@@ -24,6 +25,7 @@ pub struct PoolOps {
     pub submit: unsafe extern "C" fn(*mut c_void, u32, u32, u64, u64, *const u16) -> i32,
     pub completion: unsafe extern "C" fn(*mut c_void, u32, u32, *mut PoolCompletion) -> i32,
     pub now_ticks: unsafe extern "C" fn(*mut c_void) -> u64,
+    pub worker_sample: Option<unsafe extern "C" fn(*mut c_void, *mut WorkerSample)>,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Flight {
@@ -71,6 +73,7 @@ struct Feedback {
     seq: usize,
     completion: Completion,
     consumed_ticks: u64,
+    pump: Pump,
 }
 const fn crc_table() -> [u32; 256] {
     let mut t = [0; 256];
@@ -132,7 +135,18 @@ pub trait StreamIo {
     fn worker_timing(&self) -> bool {
         false
     }
-    fn worker_event(&mut self, _event: WorkerEvent) {}
+    fn worker_event(&mut self, _event: WorkerEvent, _pump: Pump, _feedback_pump: Pump) {}
+    fn worker_completion(
+        &mut self,
+        _direction: usize,
+        _slot: usize,
+        _flight: Flight,
+        _completion: &PoolCompletion,
+        _consumed: u64,
+        _draining: bool,
+    ) {
+    }
+    fn worker_sample(&mut self, _sample: WorkerSample) {}
     /// Optional observation on the USB owner thread. It never changes scheduling
     /// or turns a diagnostic clock-read error into a transport failure.
     fn submission_timing(&self) -> bool {
@@ -196,6 +210,7 @@ struct PreviousCompletion {
     last_packet: u64,
     callback: u64,
     consumed: u64,
+    pump: Pump,
 }
 pub struct PoolSession {
     previous: [[Option<PreviousCompletion>; DEPTH]; 2],
@@ -266,6 +281,7 @@ impl PoolSession {
         ctx: *mut c_void,
         records: &mut Journal<'_>,
         io: &mut impl StreamIo,
+        draining: bool,
     ) {
         for d in 0..2 {
             for slot in 0..self.depth {
@@ -297,7 +313,11 @@ impl PoolSession {
                         last_packet: completion.result.packets[ENTRIES - 1].ticks,
                         callback: completion.result.callback_ticks,
                         consumed: consumed_ticks,
+                        pump: completion.pump,
                     });
+                }
+                if io.worker_timing() {
+                    io.worker_completion(d, slot, flight, &completion, consumed_ticks, draining);
                 }
                 self.slots[d][slot] = None;
                 self.completed[d] += 1;
@@ -356,6 +376,7 @@ impl PoolSession {
                         seq: flight.seq,
                         completion: c,
                         consumed_ticks,
+                        pump: completion.pump,
                     });
                 }
             }
@@ -435,6 +456,8 @@ impl PoolSession {
             self.stop("invalid_journal");
             return;
         }
+        let mut sampled_at = 0;
+        sample_worker(ops, ctx, io, &mut sampled_at);
         let r = (ops.base.clock)(ctx, &mut self.anchor);
         if r != 0 {
             self.stop("clock_query_failed");
@@ -466,7 +489,7 @@ impl PoolSession {
             } else {
                 0
             };
-            self.poll(ops, ctx, records, io);
+            self.poll(ops, ctx, records, io, false);
             let poll_end_ticks = if observe_worker {
                 (ops.now_ticks)(ctx)
             } else {
@@ -546,7 +569,11 @@ impl PoolSession {
                     }
                     if clock_result != 0 || !schedule_valid(now.frame, start) {
                         if observe_worker {
-                            io.worker_event(event);
+                            io.worker_event(
+                                event,
+                                self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
+                                feedback.map_or(Pump::default(), |f| f.pump),
+                            );
                         }
                         self.submission_failure = Some(SubmissionFailure {
                             status: clock_result,
@@ -652,7 +679,11 @@ impl PoolSession {
                                 event.flags |= wt::RETURNED;
                                 event.returned_frame = returned.frame;
                             }
-                            io.worker_event(event);
+                            io.worker_event(
+                                event,
+                                self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
+                                feedback.map_or(Pump::default(), |f| f.pump),
+                            );
                         }
                         self.submission_failure = Some(SubmissionFailure {
                             status: r,
@@ -698,9 +729,23 @@ impl PoolSession {
                         }
                     }
                     if observe_worker {
-                        io.worker_event(event);
+                        io.worker_event(
+                            event,
+                            self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
+                            feedback.map_or(Pump::default(), |f| f.pump),
+                        );
                     }
                 }
+            }
+            if observe_worker
+                && sample_due(
+                    sampled_at,
+                    loop_enter_ticks,
+                    self.info.timebase_numer,
+                    self.info.timebase_denom,
+                )
+            {
+                sample_worker(ops, ctx, io, &mut sampled_at);
             }
             if self.pending().iter().any(|&n| n > 0) {
                 let begin = if observe_worker {
@@ -716,6 +761,7 @@ impl PoolSession {
                 self.stop("pipeline_stalled");
             }
         }
+        sample_worker(ops, ctx, io, &mut sampled_at);
     }
     pub unsafe fn drain(&mut self, ops: &PoolOps, ctx: *mut c_void, records: &mut [Vec<Trace>; 2]) {
         self.drain_with(
@@ -744,7 +790,7 @@ impl PoolSession {
         while self.pending().iter().any(|&n| n > 0) && began.elapsed() < Duration::from_millis(1000)
         {
             (ops.base.pump)(ctx);
-            self.poll(ops, ctx, records, io);
+            self.poll(ops, ctx, records, io, true);
         }
         self.drain_failed = self.pending().iter().any(|&n| n > 0);
         if self.drain_failed {
@@ -752,6 +798,24 @@ impl PoolSession {
         }
     }
 }
+// Read-only telemetry failures never enter the transport state machine.
+fn sample_due(last: u64, now: u64, numer: u32, denom: u32) -> bool {
+    numer != 0
+        && denom != 0
+        && u128::from(now.saturating_sub(last)) * u128::from(numer)
+            >= 1_000_000_000u128 * u128::from(denom)
+}
+unsafe fn sample_worker(ops: &PoolOps, ctx: *mut c_void, io: &mut impl StreamIo, last: &mut u64) {
+    if io.worker_timing() {
+        if let Some(f) = ops.worker_sample {
+            let mut value = WorkerSample::default();
+            f(ctx, &mut value);
+            *last = (ops.now_ticks)(ctx);
+            io.worker_sample(value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,6 +837,6 @@ mod tests {
     }
     #[test]
     fn callback_layout() {
-        assert_eq!(std::mem::size_of::<PoolCompletion>(), 1048);
+        assert_eq!(std::mem::size_of::<PoolCompletion>(), 1096);
     }
 }

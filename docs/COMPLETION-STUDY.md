@@ -240,6 +240,13 @@ match measurements to ownership events, distinguish data visibility from lifetim
 and test sample placement separately from transport margin. No E-MU source or
 ASFW implementation was changed.
 
+The subsequent [observation-only implementation](DELIVERY-OBSERVATION.md) is
+now installed and has passed 13 isolated short trials and two ten-minute duplex
+sessions at unchanged geometry and ownership. Tone instrument checks and owner
+listening also passed. Correlation exposed a 13.277 ms
+input pump followed by a 0.021 ms output pump with 8.650 ms packet-to-callback
+delay. Native wait/descheduling cause and startup reliability remain unresolved.
+
 ## Reproduction and retained evidence
 
 Local, ignored evidence: `build/validation/completion-study-20261018/`.

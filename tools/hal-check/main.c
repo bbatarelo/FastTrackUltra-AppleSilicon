@@ -107,11 +107,12 @@ static bool describe(AudioDeviceID device){
     return ok;
 }
 int main(int argc,char **argv){
-    unsigned seconds=0;bool tone=false,timing=false,worker=false;
-    if(argc==2 && strcmp(argv[1],"--worker-timing")==0)worker=true;
+    unsigned seconds=0;bool tone=false,timing=false,worker=false,delivery=false;
+    if(argc==2 && strcmp(argv[1],"--delivery")==0)delivery=true;
+    else if(argc==2 && strcmp(argv[1],"--worker-timing")==0)worker=true;
     else if(argc==2 && strcmp(argv[1],"--timing")==0)timing=true;
     else if(argc==2 && strcmp(argv[1],"--tone")==0){tone=true;seconds=12;}
-    else if(argc==3 && strcmp(argv[1],"--silence")==0){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(!*argv[2] || *end || n<1 || n>120)return 2;seconds=(unsigned)n;}else if(argc!=1){fprintf(stderr,"Usage: %s [--silence 1..120 | --tone | --timing | --worker-timing]\n",argv[0]);return 2;}
+    else if(argc==3 && strcmp(argv[1],"--silence")==0){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(!*argv[2] || *end || n<1 || n>120)return 2;seconds=(unsigned)n;}else if(argc!=1){fprintf(stderr,"Usage: %s [--silence 1..120 | --tone | --timing | --worker-timing | --delivery]\n",argv[0]);return 2;}
     AudioObjectPropertyAddress a={kAudioHardwarePropertyDevices,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};UInt32 bytes=0;
     if(AudioObjectGetPropertyDataSize(kAudioObjectSystemObject,&a,0,NULL,&bytes))return 1;
     AudioDeviceID *devices=calloc(1,bytes?bytes:1);if(!devices)return 1;
@@ -119,7 +120,7 @@ int main(int argc,char **argv){
     AudioDeviceID selected=0;unsigned matches=0;
     for(UInt32 i=0;i<bytes/sizeof(*devices);i++){CFStringRef uid=string(devices[i],kAudioDevicePropertyDeviceUID);if(uid){if(CFStringHasPrefix(uid,CFSTR("net.batarelo.FastTrackUltra:"))){selected=devices[i];matches++;}CFRelease(uid);}}
     free(devices);if(matches!=1){fprintf(stderr,"Expected one published FastTrackUltra device; found %u.\n",matches);return 1;}
-    if(!describe(selected))return 1;if(worker)return print_string(selected,'ftuW',"worker timing")?0:1;if(timing)return print_string(selected,'ftuT',"timing")?0:1;if(!seconds)return 0;
+    if(!describe(selected))return 1;if(delivery)return print_string(selected,'ftuD',"delivery")?0:1;if(worker)return print_string(selected,'ftuW',"worker timing")?0:1;if(timing)return print_string(selected,'ftuT',"timing")?0:1;if(!seconds)return 0;
     struct counters c={0};float *table=tone?make_tone():NULL;if(tone && !table)return 1;c.tone=table;AudioDeviceIOProcID proc=NULL;
     OSStatus created=AudioDeviceCreateIOProcID(selected,io,&c,&proc);if(created){fprintf(stderr,"CreateIOProc failed: %d\n",created);free(table);return 1;}
     OSStatus started=AudioDeviceStart(selected,proc);if(started){fprintf(stderr,"Start failed: %d\n",started);print_string(selected,'ftuS',"start failure status");AudioDeviceDestroyIOProcID(selected,proc);free(table);return 1;}
