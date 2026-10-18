@@ -3,14 +3,15 @@
 use crate::{
     clock::ClockSnapshot,
     geometry::{
-        playback_window, DEFAULT_BUFFER_FRAMES, INPUT_SAFETY, MIN_BUFFER_FRAMES, OUTPUT_SAFETY,
-        PLAYBACK_OFFSET, RATE, USB_BLOCK_MAX_FRAMES,
+        playback_window, DEFAULT_BUFFER_FRAMES, INPUT_SAFETY, LIVE_QUEUE_DEPTH, MIN_BUFFER_FRAMES,
+        OUTPUT_SAFETY, PLAYBACK_OFFSET, RATE, USB_BLOCK_MAX_FRAMES,
     },
     native::*,
     pool::*,
     scheduler::*,
     timeline::*,
     timing::{distance, Metric, Snapshot as TimingSnapshot, Timing},
+    worker_timing::{Event as WorkerEvent, Snapshot as WorkerSnapshot, WorkerTiming},
     PENDING_OWNERSHIP,
 };
 use std::{
@@ -94,6 +95,7 @@ struct Shared {
     epoch: AtomicU64,
     calls: AtomicUsize,
     timing: Timing,
+    worker_timing: WorkerTiming,
     capture: Timeline,
     playback: Timeline,
     clock: PublishedClock,
@@ -120,6 +122,7 @@ impl Shared {
             epoch: AtomicU64::new(0),
             calls: AtomicUsize::new(0),
             timing: Timing::new(),
+            worker_timing: WorkerTiming::new(),
             capture: Timeline::new(),
             playback: Timeline::new(),
             clock: PublishedClock::new(),
@@ -157,6 +160,7 @@ impl Shared {
     fn reset(&self, epoch: u64) {
         self.clock.publish(None);
         self.timing.reset(epoch);
+        self.worker_timing.reset(epoch);
         self.epoch.store(epoch, SeqCst);
         self.stop.store(false, SeqCst);
         for a in [
@@ -244,6 +248,13 @@ impl AudioIo {
     }
 }
 impl StreamIo for AudioIo {
+    fn worker_timing(&self) -> bool {
+        true
+    }
+    fn worker_event(&mut self, mut event: WorkerEvent) {
+        event.captured = self.shared.captured.load(SeqCst);
+        self.shared.worker_timing.observe(event);
+    }
     fn submission_timing(&self) -> bool {
         true
     }
@@ -450,7 +461,7 @@ unsafe fn worker(shared: Arc<Shared>, factory: Factory, product: u32, location: 
         vec![Trace::default(); FEEDBACK_SLOTS],
         vec![Trace::default(); FEEDBACK_SLOTS],
     ];
-    let mut session = PoolSession::new(epoch, info);
+    let mut session = PoolSession::with_depth(epoch, info, LIVE_QUEUE_DEPTH);
     let mut activated = false;
     let config_status = (ops.base.config)(ctx, config.as_mut_ptr(), config.len(), &mut length);
     (ops.base.info)(ctx, &mut info);
@@ -472,8 +483,11 @@ unsafe fn worker(shared: Arc<Shared>, factory: Factory, product: u32, location: 
         session.stop("setup_precondition");
         shared.fault.store(3, SeqCst);
     } else {
-        session = PoolSession::new(epoch, info);
-        if (ops.base.prepare)(ctx, DEPTH as u32) != 0 {
+        shared
+            .worker_timing
+            .configure(info.timebase_numer, info.timebase_denom, LIVE_QUEUE_DEPTH);
+        session = PoolSession::with_depth(epoch, info, LIVE_QUEUE_DEPTH);
+        if (ops.base.prepare)(ctx, session.queue_depth() as u32) != 0 {
             session.stop("prepare_failed");
             shared.fault.store(4, SeqCst);
         } else if shared.stop.load(SeqCst) {
@@ -877,6 +891,12 @@ pub unsafe extern "C" fn ftu_live_timing(handle: *mut Live, out: *mut TimingSnap
     }
 }
 #[no_mangle]
+pub unsafe extern "C" fn ftu_live_worker_timing(handle: *mut Live, out: *mut WorkerSnapshot) {
+    if let (Some(h), Some(out)) = (handle.as_ref(), out.as_mut()) {
+        *out = h.shared.worker_timing.snapshot();
+    }
+}
+#[no_mangle]
 pub unsafe extern "C" fn ftu_live_destroy(handle: *mut Live) -> i32 {
     let Some(h) = handle.as_ref() else {
         return -1;
@@ -911,6 +931,151 @@ mod tests {
     }
     unsafe extern "C" fn unused_schedule(_: *mut c_void, _: *const ThreadSchedule) -> i32 {
         0
+    }
+
+    fn placement_fixture() -> (Live, AudioIo) {
+        let shared = Arc::new(Shared::new());
+        shared.reset(1);
+        shared.clock.publish(Some(ClockAnchor {
+            epoch: 1,
+            frame: 0,
+            ticks: 1_000_000,
+            ticks_per_frame: 500.0,
+        }));
+        shared.set_phase(RUNNING);
+        let io = AudioIo::new(
+            shared.clone(),
+            1,
+            Info {
+                timebase_numer: 125,
+                timebase_denom: 3,
+                ..Info::default()
+            },
+        );
+        let live = Live {
+            shared,
+            control: Mutex::new(Control {
+                worker: None,
+                clients: Vec::new(),
+            }),
+            factory: Factory {
+                open: unused_open,
+                ops: unused_ops,
+                close: unused_close,
+                configure_thread: unused_schedule,
+            },
+            product: 0x2080,
+            location: 123,
+        };
+        (live, io)
+    }
+    fn frame_tags(first: u64, frames: usize) -> Vec<f32> {
+        (0..frames)
+            .flat_map(|f| {
+                (0..CHANNELS).map(move |ch| {
+                    let frame = first + f as u64;
+                    let value = ((frame % 10_000) * 8 + ch as u64 + 1) as i32;
+                    let word = match ch {
+                        6 => -value,
+                        7 if frame.is_multiple_of(17) => 8_388_607,
+                        7 if frame.is_multiple_of(19) => -8_388_608,
+                        _ => value,
+                    };
+                    word as f32 / 8_388_608.0
+                })
+            })
+            .collect()
+    }
+    #[test]
+    fn real_hal_pcm_capture_path_preserves_sample_indices_across_ring_wrap() {
+        for buffer in [64, 128, 256, 512, 1024, 4096] {
+            for maximum_packet in [false, true] {
+                let (mut live, mut io) = placement_fixture();
+                let position = 3 * RING_FRAMES as u64 - 96;
+                live.shared.captured.store(position - 3 * 384, SeqCst);
+                let mut completion = Completion::default();
+                for (i, p) in completion.packets.iter_mut().enumerate() {
+                    p.requested = 312;
+                    p.actual = if maximum_packet {
+                        312
+                    } else {
+                        ((5 + i % 3) * 24) as u16
+                    };
+                    p.ticks = 1_000_000 + i as u64 * 3000;
+                }
+                let frames: usize = completion
+                    .packets
+                    .iter()
+                    .map(|p| usize::from(p.actual / 24))
+                    .sum();
+                let mut first = position / buffer as u64 * buffer as u64;
+                while first < position + frames as u64 {
+                    let samples = frame_tags(first, buffer);
+                    assert_eq!(
+                        unsafe {
+                            ftu_live_write(&mut live, first, buffer as u32, samples.as_ptr())
+                        },
+                        0
+                    );
+                    first += buffer as u64;
+                }
+                let mut packed = vec![0; BLOCK_BYTES];
+                io.output(position - PLAYBACK_OFFSET, frames, &mut packed)
+                    .unwrap();
+                assert_eq!(live.shared.playback_missing.load(SeqCst), 0);
+                // A nominal analogue delay is a fixture only; preserve it in
+                // the input coordinate while exercising actual strided decode.
+                let input_first = position + 58;
+                let mut native_capture = vec![0; BLOCK_BYTES];
+                let mut source = 0;
+                for (i, p) in completion.packets.iter().enumerate() {
+                    let n = usize::from(p.actual);
+                    native_capture[i * 312..i * 312 + n]
+                        .copy_from_slice(&packed[source..source + n]);
+                    source += n;
+                }
+                io.capture(0, &completion, &native_capture).unwrap();
+                io.ordered(0, input_first, &completion).unwrap();
+                let mut returned = vec![0.; frames * CHANNELS];
+                assert_eq!(
+                    unsafe {
+                        ftu_live_read(&mut live, input_first, frames as u32, returned.as_mut_ptr())
+                    },
+                    0
+                );
+                assert_eq!(returned, frame_tags(position, frames));
+                assert_eq!(live.shared.capture_missing.load(SeqCst), 0);
+            }
+        }
+    }
+    #[test]
+    fn real_packing_reports_a_hole_despite_future_publication_and_late_repair() {
+        let (mut live, mut io) = placement_fixture();
+        let position = 3 * RING_FRAMES as u64 - 96;
+        live.shared.captured.store(position - 3 * 384, SeqCst);
+        for (first, frames) in [(position, 9), (position + 10, 758)] {
+            let samples = frame_tags(first, frames);
+            assert_eq!(
+                unsafe { ftu_live_write(&mut live, first, frames as u32, samples.as_ptr()) },
+                0
+            );
+        }
+        assert!(live.shared.playback.high_water() > EPOCH_FRAMES + position + 384);
+        let mut packed = vec![0; BLOCK_BYTES];
+        io.output(position - PLAYBACK_OFFSET, 384, &mut packed)
+            .unwrap();
+        assert_eq!(live.shared.playback_missing.load(SeqCst), 1);
+        assert_eq!(&packed[9 * 24..10 * 24], &[0; 24]);
+        let repaired = frame_tags(position + 9, 1);
+        assert_eq!(
+            unsafe { ftu_live_write(&mut live, position + 9, 1, repaired.as_ptr()) },
+            0
+        );
+        let mut newer = vec![0; BLOCK_BYTES];
+        io.output(position - PLAYBACK_OFFSET, 384, &mut newer)
+            .unwrap();
+        assert_ne!(&newer[9 * 24..10 * 24], &[0; 24]);
+        assert_eq!(live.shared.playback_missing.load(SeqCst), 1);
     }
 
     #[test]

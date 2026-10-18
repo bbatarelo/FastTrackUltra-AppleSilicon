@@ -59,7 +59,7 @@ int main(void){
     assert(get32(2,kAudioDevicePropertyDeviceIsAlive,kAudioObjectPropertyScopeGlobal)==1);
     assert(get32(2,kAudioDevicePropertyZeroTimeStampPeriod,kAudioObjectPropertyScopeGlobal)>=10923);
     assert(get32(2,kAudioDevicePropertySafetyOffset,kAudioObjectPropertyScopeInput)==1024);
-    assert(get32(2,kAudioDevicePropertySafetyOffset,kAudioObjectPropertyScopeOutput)==3072);
+    assert(get32(2,kAudioDevicePropertySafetyOffset,kAudioObjectPropertyScopeOutput)==2560);
     assert(get32(2,kAudioDevicePropertyUsesVariableBufferFrameSizes,kAudioObjectPropertyScopeGlobal)==0);
     a=(AudioObjectPropertyAddress){kAudioStreamPropertyVirtualFormat,kAudioObjectPropertyScopeGlobal,0};AudioStreamBasicDescription f;
     assert(ftu_get_data(g_ref,4,0,&a,0,NULL,sizeof f,&size,&f)==0);
@@ -96,9 +96,32 @@ int main(void){
     CFRelease(status);
     assert(ftu_set_data(g_ref,2,0,&a,0,NULL,sizeof frames,&frames)==kAudioHardwareUnsupportedOperationError);
     a=(AudioObjectPropertyAddress){kAudioObjectPropertyCustomPropertyInfoList,kAudioObjectPropertyScopeGlobal,0};
-    AudioServerPlugInCustomPropertyInfo props[3];
+    AudioServerPlugInCustomPropertyInfo props[4];
     assert(ftu_get_data(g_ref,2,0,&a,0,NULL,sizeof props,&size,props)==0 && size==sizeof props);
-    assert(props[2].mSelector==FTU_TIMING_PROPERTY);
+    assert(props[2].mSelector==FTU_TIMING_PROPERTY && props[3].mSelector==FTU_WORKER_PROPERTY);
+    _Static_assert(sizeof(struct ftu_worker_event)==256,"worker event ABI");
+    _Static_assert(sizeof(struct ftu_worker_snapshot)==6760,"worker snapshot ABI");
+    a=(AudioObjectPropertyAddress){FTU_WORKER_PROPERTY,kAudioObjectPropertyScopeGlobal,0};
+    assert(ftu_has_property(g_ref,2,0,&a));settable=true;
+    assert(ftu_is_settable(g_ref,2,0,&a,&settable)==0 && !settable);
+    assert(ftu_get_data(g_ref,2,0,&a,0,NULL,sizeof status-1,&size,&status)==kAudioHardwareBadPropertySizeError);
+    assert(ftu_get_data(g_ref,2,0,&a,0,NULL,sizeof status,&size,&status)==0 && status);
+    assert(CFStringGetCString(status,timing_json,sizeof timing_json,kCFStringEncodingUTF8));CFRelease(status);
+    assert(strstr(timing_json,"\"observed\":0") && strstr(timing_json,"\"late\":[]"));
+    assert(ftu_set_data(g_ref,2,0,&a,0,NULL,sizeof frames,&frames)==kAudioHardwareUnsupportedOperationError);
+    struct ftu_worker_snapshot synthetic={.version=1,.valid=1,.epoch=77,.timebase_numer=125,.timebase_denom=3,.queue_depth=4};
+    for(unsigned i=0;i<FTU_WORKER_RECENT;i++){
+        for(unsigned j=0;j<FTU_WORKER_WORDS;j++)synthetic.recent[i].words[j]=UINT64_MAX;
+        synthetic.recent[i].words[0]=i+1;synthetic.recent[i].words[6]=255;
+    }
+    synthetic.worst[0]=synthetic.recent[0];synthetic.worst[1]=synthetic.recent[1];
+    for(unsigned i=0;i<FTU_WORKER_LATE;i++)synthetic.late[i]=synthetic.recent[i];
+    status=worker_snapshot_text(&synthetic);assert(status);
+    char *large=malloc(131072);assert(large && CFStringGetCString(status,large,131072,kCFStringEncodingUTF8));CFRelease(status);
+    assert(strstr(large,"\"submit_status\":-1") && strstr(large,"18446744073709551615"));free(large);
+    synthetic=(struct ftu_worker_snapshot){.version=1,.valid=1};synthetic.recent[0].words[0]=1;
+    status=worker_snapshot_text(&synthetic);assert(CFStringGetCString(status,timing_json,sizeof timing_json,kCFStringEncodingUTF8));CFRelease(status);
+    assert(strstr(timing_json,"\"previous_sequence\":null") && strstr(timing_json,"\"returned_frame\":null"));
     found=false;poll_presence(false);assert(get32(2,kAudioDevicePropertyDeviceIsAlive,kAudioObjectPropertyScopeGlobal)==0);
     assert(ftu_live_destroy(live_handle())==0);puts("HAL boundary tests passed");return 0;
 }

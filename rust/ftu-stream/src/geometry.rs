@@ -1,7 +1,8 @@
 //! One static 48 kHz configuration for the HAL and the live Rust timelines.
-//! USB queue policy is unchanged by this configuration: IN-derived packet
-//! counts are still replayed 64 ms later, with immutable submitted payloads.
-use crate::scheduler::{ENTRIES, FEEDBACK_DELAY_MS};
+//! Live queue depth is explicit; IN-derived packet counts are still replayed
+//! 64 ms later, with immutable submitted payloads. Standalone probes retain
+//! their original four-slot policy.
+use crate::scheduler::{DEPTH, ENTRIES, FEEDBACK_DELAY_MS};
 
 pub const CHANNELS: usize = 8;
 pub const RATE: u32 = 48_000;
@@ -13,9 +14,10 @@ pub const MIN_BUFFER_FRAMES: u32 = 64;
 pub const MAX_BUFFER_FRAMES: usize = 4096;
 pub const DEFAULT_BUFFER_FRAMES: u32 = 256;
 pub const INPUT_SAFETY: u32 = 1024;
-// First measured-margin experiment; see docs/TIMING-OBSERVATION.md.
-// Input safety and USB queue/replay policy remain unchanged.
-pub const OUTPUT_SAFETY: u32 = 3072;
+// Single-variable output-safety candidate; USB ownership/queue stay qualified.
+// Prediction, evidence limits and gates: docs/PLACEMENT-MODEL.md.
+pub const LIVE_QUEUE_DEPTH: usize = 4;
+pub const OUTPUT_SAFETY: u32 = 2560;
 pub const PLAYBACK_OFFSET: u64 = FEEDBACK_DELAY_MS * RATE as u64 / 1000;
 pub const USB_BLOCK_MAX_FRAMES: usize = ENTRIES * 13;
 pub const RING_FRAMES: usize = 32_768;
@@ -25,6 +27,7 @@ pub const WRITE_AHEAD_FRAMES: u64 = (RING_FRAMES / 2) as u64;
 // Include two maximum client buffers and a full USB completion batch in the
 // future budget; actual HAL geometry must still be measured on each OS.
 const _: () = assert!(ZTS_PERIOD >= 10_923);
+const _: () = assert!(LIVE_QUEUE_DEPTH >= 2 && LIVE_QUEUE_DEPTH <= DEPTH);
 const _: () = assert!(MIN_BUFFER_FRAMES <= DEFAULT_BUFFER_FRAMES);
 const _: () = assert!(DEFAULT_BUFFER_FRAMES as usize <= MAX_BUFFER_FRAMES);
 const _: () = assert!(USB_BLOCK_MAX_FRAMES <= MAX_BUFFER_FRAMES);
@@ -52,6 +55,19 @@ pub fn playback_window(first: u64, frames: u32, captured: u64) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn replay_count_schedule_and_pcm_coordinates_agree() {
+        assert_eq!(
+            PLAYBACK_OFFSET,
+            crate::scheduler::FEEDBACK_DELAY_MS * u64::from(RATE) / 1000
+        );
+        assert_eq!(ENTRIES / 8, 8);
+        for seq in [0, 1, 8, 1000] {
+            let input = crate::scheduler::start_frame(100, seq, false).unwrap();
+            let output = crate::scheduler::start_frame(100, seq, true).unwrap();
+            assert_eq!(output - input, crate::scheduler::FEEDBACK_DELAY_MS);
+        }
+    }
     #[test]
     fn write_window_covers_whole_hal_period_and_maximum_buffers() {
         for captured in [0, ZTS_PERIOD - 48, ZTS_PERIOD, 2 * ZTS_PERIOD - 1] {

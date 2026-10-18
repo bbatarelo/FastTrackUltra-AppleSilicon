@@ -9,6 +9,7 @@ mod pool;
 mod scheduler;
 pub mod timeline;
 mod timing;
+mod worker_timing;
 use native::*;
 use scheduler::*;
 use std::{

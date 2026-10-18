@@ -8,9 +8,12 @@
 | [Contributing](../CONTRIBUTING.md) | Running tests, reporting issues or proposing changes |
 | [Architecture](ARCHITECTURE.md) | Understanding Rust, native APIs, timing and ownership |
 | [Timing geometry candidate](TIMING-GEOMETRY.md) | Reviewing the buffer/timestamp change, measured sweep and remaining latency work |
-| [Timing observations](TIMING-OBSERVATION.md) | Understanding playback/capture margins and the next latency experiment |
+| [Timing observations](TIMING-OBSERVATION.md) | Understanding measured playback/capture margins and the first latency reduction |
+| [USB queue model](QUEUE-MODEL.md) | Reviewing block-size/depth tradeoffs and the rejected three-slot experiment |
+| [Worker timing](WORKER-TIMING.md) | Separating callback delivery, worker processing, preparation and submission |
 | [Findings](FINDINGS.md) | Looking up measured protocol and HAL behavior |
 | [GarageBand and loopback](LOOPBACK-QUALIFICATION.md) | Reading the reproducible 48 kHz hardware baseline |
+| [Sample placement and safety reduction](PLACEMENT-MODEL.md) | Understanding physical latency, the independent model and the qualified four-slot 2560 reduction |
 | [ASFireWire lessons](ASFW-REUSE.md) | Evaluating timing, ownership and measurement methods |
 | [Diagnostics](../tools/README.md) | Choosing a read-only inspector or an explicit hardware experiment |
 | [Packaging](PACKAGING.md) | Preparing installers and future signed/notarized releases |

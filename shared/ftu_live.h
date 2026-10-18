@@ -44,6 +44,19 @@ struct ftu_timing_snapshot {
     struct ftu_timing_metric metrics[2][FTU_TIMING_METRICS];
 };
 void ftu_live_timing(struct ftu_live *, struct ftu_timing_snapshot *);
+/* Worker observation v1, separate from timing v1. Flags and field order are
+ * specified in docs/WORKER-TIMING.md; no samples or scheduling policy here. */
+#define FTU_WORKER_WORDS 32
+#define FTU_WORKER_RECENT 16
+#define FTU_WORKER_LATE 8
+struct ftu_worker_event { uint64_t words[FTU_WORKER_WORDS]; };
+struct ftu_worker_snapshot {
+    uint64_t version, valid, epoch, timebase_numer, timebase_denom, queue_depth;
+    uint64_t threshold_ms, observed, dropped, recent_overwritten, late_seen, late_retained, late_overflow;
+    struct ftu_worker_event worst[2], recent[FTU_WORKER_RECENT], late[FTU_WORKER_LATE];
+};
+void ftu_live_worker_timing(struct ftu_live *, struct ftu_worker_snapshot *);
+
 /* phase: 0 idle, 1 starting, 2 running, 3 stopping, 4 fault, 5 quarantined.
  * Quarantine forbids restart and retains uncertain native resources in-process.
  * Startup/stop are control-thread calls; IO/timestamp calls are bounded, with

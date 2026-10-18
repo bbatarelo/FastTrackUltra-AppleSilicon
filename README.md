@@ -6,8 +6,9 @@ CoreAudio/USB boundary. It installs no kernel or system extension and requires
 no SIP or startup-security changes.
 
 **Early development.** Desktop Ultra playback and recording have worked at
-48 kHz, including a short GarageBand test. Monitoring latency is still high
-(about 111–116 ms). Ultra 8R hardware and MIDI are not yet qualified.
+48 kHz, including a short GarageBand test. Monitoring latency is still high:
+about 78.5 ms round trip at 64-frame buffers, or 97.2 ms at 512 frames.
+Ultra 8R hardware and MIDI are not yet qualified.
 See [current status](docs/STATUS.md) before relying on it for a session.
 
 ## Compatibility
@@ -108,7 +109,13 @@ two-client checks. The 17 October [output-safety reduction](docs/TIMING-OBSERVAT
 measured **89.2 ms round trip at 64 frames**, down from 110.5 ms. All twelve
 chirp runs across six buffer sizes passed. Monitoring latency is still high;
 these are short measurements on one desktop Ultra. See [current status](docs/STATUS.md)
-for exact build identities and remaining limits.
+for exact build identities and remaining limits. The experimental
+[three-slot queue candidate](docs/QUEUE-MODEL.md) measured **78.5 ms at 64 frames**,
+but its hardware sweep stopped on a submission-headroom check. The qualified
+four-slot [output-safety reduction](docs/PLACEMENT-MODEL.md) now reaches **78.5 ms
+at 64 frames** with the USB queue unchanged. Its loopback sweep, silent two-client
+checks and owner listening passed; source defaults match that tested build.
+The rejected three-slot experiment remains preserved for investigation.
 
 The [roadmap](docs/ROADMAP.md) covers lower latency and timing, reliability,
 MIDI input/output, a diagnostics/routing/mixer app, onboard DSP, other rates,

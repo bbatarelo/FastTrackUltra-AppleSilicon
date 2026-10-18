@@ -3,9 +3,11 @@
 | Tool | Purpose | Starts hardware audio? |
 |---|---|---|
 | `make check` / `build/hal-check` | Loaded build, device geometry and health | No, without explicit tone/silence options |
+| [`build/hal-check --worker-timing`](../docs/WORKER-TIMING.md) | Read coherent, sample-free USB-worker stage records when `ftuW` is available | No |
 | `build/hal-check --timing` | Read-only playback/capture margins when the installed build exposes `ftuT` | No |
 | `build/hal-scenarios` | Bounded buffer/read-back and multi-client experiments | Yes, silent streaming |
 | [`hal-loopback`](hal-loopback/README.md) | Output 3 → selected input 3/4; raw/timestamp RTL and actual callbacks | Yes, explicit prepared run; saves selected input |
+| [Offline timing model](timing-model/README.md) | USB block/depth, callback/stall, feedback-capacity and deadline experiments | No |
 | [`ftu-probe`](ftu-probe/README.md) | Descriptors, controls and bounded raw-USB experiments | Depends on the explicit subcommand |
 | `build/live-check` | Standalone Rust live-session bring-up | Yes; direct USB ownership |
 | `build/hal-host-check` | Standalone host for a local HAL bundle | Yes; direct USB ownership through the bundle |

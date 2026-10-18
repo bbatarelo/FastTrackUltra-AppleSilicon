@@ -127,6 +127,131 @@ separately from measured extrema. The FTU USB constants and the resulting
 3072-frame experiment are not E-MU recommendations. These observations do not
 establish an E-MU defect or backport need.
 
+## Phase and stall modelling applied
+
+The [USB queue model](QUEUE-MODEL.md) applies the phase/burst/stall method in a
+small independent Rust executable, then checks the selected profile against the
+actual Rust pool under fault injection. It reproduces the measured baseline
+horizon before comparing alternatives. Smaller blocks exposed a feedback-history
+overrun; four 4 ms slots exposed phase-dependent deadline misses; three 8 ms
+slots survived the chosen bounded cases and still rejected excessive stalls.
+
+For a later E-MU evaluation, the concrete method is to vary callback delivery,
+owner-thread stalls and submission cost independently, preserve the failing
+profiles, then test real ownership code at the chosen geometry. Include feedback
+history and execution budget alongside queue duration. This does not establish
+E-MU's limits: its transport constants, clock scheme and native API must supply
+its own model and measurements. No ASFW implementation was copied.
+
+## Implementation comparison — 18 October 2026
+
+A direct implementation review used the separate local ASFW checkout at
+`c5d3b2f3d98f8224def97334bbde49d10169eee3`. This is a second inspected revision,
+not a claim that it is newer than the original pin above or current upstream.
+The original pinned object is not present in that checkout, so a revision diff
+was not available. The relevant inspected files have no local modifications.
+
+The actual TX path is more than queue-depth tuning:
+
+- `HandleOutputWriteEnd` calls `FillTransmitPayloads` synchronously on CoreAudio's
+  IO thread. It copies each available frame into its armed packet once, without
+  locks or allocations. The preparation queue arms packets separately.
+- The fill uses a projected hardware packet position plus a finality guard.
+  Frames whose deadline has passed retain silence and increment a miss counter;
+  storage generation and completion govern reuse.
+- `AudioTimingGeometry.hpp` separates descriptor coverage and producer-stall
+  slack from the audio-fill deadline. A deep prepared transport schedule does
+  not, by itself, require equally early PCM production.
+- Capture completion groups are 1 ms; input safety covers the profile's margin
+  or one completion batch, whichever is larger.
+
+ASFW's ownership journal reports **337 frames / 7.02 ms at 48 kHz and a
+64-frame buffer** on a Saffire Pro 24 DSP after its T7/E2 changes. That is an
+upstream recorded result on different hardware, not an FTU target already proven
+feasible. Earlier journal entries describe an approximately 158 ms placement
+error and its removal; that historical defect is not evidence FTU shares it.
+
+Our current FTU implementation fills packed PCM on the USB worker before
+submission and leaves submitted payloads immutable until completion. The
+three-slot candidate changes queue depth and output safety within that design;
+its predicted 78.539 ms round trip is **not architectural parity with ASFW**.
+Its model also omits HAL writes and PCM-ring availability. It screens transport
+schedules, while separate production tests and physical runs check other parts.
+
+The transferable next investigation is an end-to-end frame-placement and
+ownership model: HAL write, PCM availability, native submission, actual USB
+service time, capture publication and HAL read. Explore shorter USB batches and
+less required submission lead using that model. Do not copy ASFW's late writes
+into armed FireWire packets onto already submitted USB buffers without proving
+the native API's ownership and visibility contract. For E-MU, audit those same
+boundaries first; neither the FTU constants nor this comparison establish a defect.
+
+Some retained ASFW simulators describe predecessor designs. In particular,
+`tx_data_horizon_burst_sim.py` models the W/E content-horizon scheme that the
+ownership journal says T4 removed. Its stress-testing method remains useful;
+it is not a description of this inspected runtime.
+
+Sources at this second revision:
+[actual output fill](https://github.com/mrmidi/ASFireWire/blob/c5d3b2f3d98f8224def97334bbde49d10169eee3/ASFWDriver/Audio/DriverKit/ASFWAudioDriverOutputWrite.cpp),
+[transport geometry](https://github.com/mrmidi/ASFireWire/blob/c5d3b2f3d98f8224def97334bbde49d10169eee3/ASFWDriver/Shared/Isoch/AudioTimingGeometry.hpp),
+[ownership decisions and measurements](https://github.com/mrmidi/ASFireWire/blob/c5d3b2f3d98f8224def97334bbde49d10169eee3/documentation/TX_OWNERSHIP.md).
+These were read from the local checkout; browser retrieval of the pinned pages
+was unavailable. No ASFW code was copied and no E-MU files were changed.
+
+## Transfer-linked timing evidence for later E-MU evaluation
+
+The [FTU worker recorder](WORKER-TIMING.md) now applies the measurement principle
+behind this comparison: retain the timeline and ownership identity of a single
+transfer, rather than infer causality by combining independent minima. Each
+record links the reused slot's completion to callback delivery, worker
+consumption, payload preparation, native submission and the observed bus lead.
+OUT also identifies the capture-feedback generation used for packet counts.
+The bounded trace retains the first low-margin events, so later good transfers
+cannot erase them, and explicitly reports overwritten/overflowed observations.
+
+For E-MU, useful mechanisms to evaluate are session/slot generation identifiers,
+separate callback-delivery and worker-consumption ticks, stage-specific elapsed
+time, first-event retention, and an offline analyzer that rejects inconsistent
+epochs. Keep packet timestamps, CoreAudio timestamps and actual host-clock reads
+distinct. Delay-injection tests should move one stage at a time and verify that
+the recorder attributes that elapsed interval correctly. Check that enabling
+observations does not allocate in the audio loop or change physical latency.
+
+This is our USB implementation of a diagnostic method, not code copied from ASFW
+or evidence that E-MU has the same problem. FTU hardware validation now covers
+13 physical runs, two-client checks and owner listening with unchanged geometry
+and round trip within about one sample of the prior checkpoint. The lowest-lead
+OUT event retained a 5.568 ms packet-timestamp-to-callback interval versus only
+0.109 ms of payload preparation. Preserving linked stages makes that distinction
+possible; aggregate minima alone could not. It does not establish a pure OS
+scheduler delay or explain the previous three-slot failure. ASFW's separation of
+packet arming and later PCM filling remains a separate architectural
+investigation with transport-specific ownership limits.
+
+## Sample-placement follow-through
+
+The [placement model](PLACEMENT-MODEL.md) now separates transport lead from
+physical monitoring latency. In FTU, replaying capture packet counts 64 ms later
+is paired with a 3072-frame PCM-index offset; adding 64 ms again to measured round
+trip would double-count it. Queue depth controls how early PCM must be ready and
+how much USB lead remains. Safety offsets determine the HAL scheduling span.
+This is the concrete FTU application of ASFW's end-to-end placement/ownership
+method, not reuse of its constants or permission for late writes to USB buffers.
+
+The FTU hardware result now supports that distinction: changing only output
+safety 3072 → 2560 reduced round trip by about 10.667 ms, to 78.539 ms at 64
+frames, while retaining four USB slots. All 13 runs, two-client checks and owner
+listening passed, with at least 22 ms submission lead. This is measured FTU
+evidence; it does not transfer the constants or qualification to E-MU.
+
+For a later E-MU audit, map every sample-coordinate shift and its physical service
+time, then test identifiable markers and common clock bias. A small timestamp
+remainder can coexist with large application round trip. Include deliberately
+missing middle publications: future high-water alone cannot prove sample coverage.
+An independent model and actual packing/ring tests provide different evidence;
+neither replaces hardware loopback or proves an OS scheduling bound. No E-MU
+changes have been made.
+
 ## Boundaries on reuse
 
 FireWire cycle counters, CIP/SYT presentation timestamps, AMDTP blocking cadence,

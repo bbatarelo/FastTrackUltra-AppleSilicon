@@ -26,6 +26,7 @@
 #define FTU_STATUS_PROPERTY 'ftuS'
 #define FTU_BUILD_PROPERTY 'ftuB'
 #define FTU_TIMING_PROPERTY 'ftuT'
+#define FTU_WORKER_PROPERTY 'ftuW'
 
 enum { kObjPlugIn = kAudioObjectPlugInObject, kObjDevice = 2, kObjInput = 3, kObjOutput = 4 };
 
@@ -157,7 +158,7 @@ typedef union {
     AudioBufferList abl;
     struct { AudioChannelLayoutTag mChannelLayoutTag; AudioChannelBitmap mChannelBitmap; UInt32 mNumberChannelDescriptions; AudioChannelDescription mChannelDescriptions[FTU_MAX_CHANNELS]; } layout;
     uint8_t raw[256];
-    AudioServerPlugInCustomPropertyInfo custom[3];
+    AudioServerPlugInCustomPropertyInfo custom[4];
 } prop_buf;
 
 /* elem != 0 marks arrays that may be truncated to the caller's buffer. */
@@ -262,12 +263,14 @@ static OSStatus device_prop(const AudioObjectPropertyAddress *a, UInt32 qsize, c
     bool io = in || out;
     switch (a->mSelector) {
     case FTU_BUILD_PROPERTY: return put_str(b, s, CFSTR(FTU_BUILD_ID));
+    case FTU_WORKER_PROPERTY:
     case FTU_TIMING_PROPERTY:
     case FTU_STATUS_PROPERTY: return put_str(b, s, CFSTR("")); /* built in get_data */
     case kAudioObjectPropertyCustomPropertyInfoList:
         b->custom[0]=(AudioServerPlugInCustomPropertyInfo){FTU_STATUS_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         b->custom[1]=(AudioServerPlugInCustomPropertyInfo){FTU_BUILD_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         b->custom[2]=(AudioServerPlugInCustomPropertyInfo){FTU_TIMING_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[3]=(AudioServerPlugInCustomPropertyInfo){FTU_WORKER_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         s->size=sizeof b->custom;s->elem=sizeof b->custom[0];return 0;
     case kAudioObjectPropertyBaseClass: return put_u32(b, s, kAudioObjectClassID);
     case kAudioObjectPropertyClass: return put_u32(b, s, kAudioDeviceClassID);
@@ -601,6 +604,38 @@ static CFStringRef timing_text(struct ftu_live *live)
     CFStringAppend(text,CFSTR("}"));return text;
 }
 
+/* Fixed layout read from Rust; all formatting stays on the property thread. */
+static CFStringRef worker_snapshot_text(const struct ftu_worker_snapshot *t)
+{
+    static const char *names[FTU_WORKER_WORDS]={"ordinal","direction","sequence","slot","ticket","captured","flags","start_frame","checked_frame","returned_frame","previous_sequence","previous_start_frame","previous_last_packet_ticks","previous_callback_ticks","previous_consumed_ticks","feedback_sequence","feedback_last_packet_ticks","feedback_callback_ticks","feedback_consumed_ticks","loop_enter_ticks","poll_end_ticks","pump_enter_ticks","pump_exit_ticks","check_begin_ticks","check_end_ticks","prepare_end_ticks","submit_begin_ticks","submit_end_ticks","query_end_ticks","check_status","submit_status","return_clock_status"};
+    static const unsigned required[FTU_WORKER_WORDS]={0,0,0,0,0,0,0,0,4,32,1,1,1,1,1,2,2,2,2,0,0,64,64,0,0,8,16,16,128,0,16,128};
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppendFormat(text,NULL,CFSTR("{\"version\":%llu,\"valid\":%llu,\"epoch\":%llu,\"timebase_numer\":%llu,\"timebase_denom\":%llu,\"queue_depth\":%llu,\"threshold_ms\":%llu,\"observed\":%llu,\"dropped\":%llu,\"recent_overwritten\":%llu,\"late_seen\":%llu,\"late_retained\":%llu,\"late_overflow\":%llu"),
+        (unsigned long long)t->version,(unsigned long long)t->valid,(unsigned long long)t->epoch,
+        (unsigned long long)t->timebase_numer,(unsigned long long)t->timebase_denom,(unsigned long long)t->queue_depth,
+        (unsigned long long)t->threshold_ms,(unsigned long long)t->observed,(unsigned long long)t->dropped,
+        (unsigned long long)t->recent_overwritten,(unsigned long long)t->late_seen,(unsigned long long)t->late_retained,(unsigned long long)t->late_overflow);
+    const struct ftu_worker_event *banks[]={t->worst,t->recent,t->late};
+    const unsigned counts[]={2,FTU_WORKER_RECENT,FTU_WORKER_LATE};
+    const char *labels[]={"worst","recent","late"};
+    for(unsigned b=0;b<3;b++){
+        CFStringAppendFormat(text,NULL,CFSTR(",\"%s\":["),labels[b]);unsigned used=0;
+        for(unsigned i=0;i<counts[b];i++){
+            const uint64_t *w=banks[b][i].words;if(!w[0])continue;
+            CFStringAppendFormat(text,NULL,CFSTR("%s{"),used++?",":"");
+            for(unsigned k=0;k<FTU_WORKER_WORDS;k++){
+                CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":"),k?",":"",names[k]);
+                if(required[k] && !(w[6]&required[k]))CFStringAppend(text,CFSTR("null"));
+                else if(k>=29)CFStringAppendFormat(text,NULL,CFSTR("%lld"),(long long)(int64_t)w[k]);
+                else CFStringAppendFormat(text,NULL,CFSTR("%llu"),(unsigned long long)w[k]);
+            }
+            CFStringAppend(text,CFSTR("}"));
+        }
+        CFStringAppend(text,CFSTR("]"));
+    }
+    CFStringAppend(text,CFSTR("}"));return text;
+}
+
 static OSStatus ftu_get_data(AudioServerPlugInDriverRef drv, AudioObjectID obj, pid_t pid,
                              const AudioObjectPropertyAddress *a, UInt32 qsize, const void *qdata,
                              UInt32 size, UInt32 *out_size, void *out)
@@ -620,6 +655,11 @@ static OSStatus ftu_get_data(AudioServerPlugInDriverRef drv, AudioObjectID obj, 
         n = size >= s.size ? s.size : size / s.elem * s.elem;
     else if (size < s.size)
         return kAudioHardwareBadPropertySizeError;
+    if (obj == kObjDevice && a->mSelector == FTU_WORKER_PROPERTY) {
+        struct ftu_worker_snapshot snapshot={0};ftu_live_worker_timing(live_handle(),&snapshot);
+        CFStringRef text=worker_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
     if (obj == kObjDevice && a->mSelector == FTU_TIMING_PROPERTY) {
         CFStringRef text=timing_text(live_handle());
         if(!text)return kAudioHardwareUnspecifiedError;

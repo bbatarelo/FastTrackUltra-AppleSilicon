@@ -1,6 +1,12 @@
 //! Fixed-memory transport state; the caller supplies a bounded diagnostic journal.
 //! A slot is reusable only after its matching generation's completion is consumed.
-use crate::{clock::SampleClock, native::*, ok, scheduler::*};
+use crate::{
+    clock::SampleClock,
+    native::*,
+    ok,
+    scheduler::*,
+    worker_timing::{self as wt, Event as WorkerEvent},
+};
 use std::{
     ffi::c_void,
     time::{Duration, Instant},
@@ -64,6 +70,7 @@ impl Default for Trace {
 struct Feedback {
     seq: usize,
     completion: Completion,
+    consumed_ticks: u64,
 }
 const fn crc_table() -> [u32; 256] {
     let mut t = [0; 256];
@@ -122,6 +129,10 @@ impl Journal<'_> {
 /// Capture must be copied here before the native slot is reused; ordered delivery
 /// later supplies its absolute sample cursor. Implementations preallocate storage.
 pub trait StreamIo {
+    fn worker_timing(&self) -> bool {
+        false
+    }
+    fn worker_event(&mut self, _event: WorkerEvent) {}
     /// Optional observation on the USB owner thread. It never changes scheduling
     /// or turns a diagnostic clock-read error into a transport failure.
     fn submission_timing(&self) -> bool {
@@ -178,7 +189,18 @@ pub struct SubmissionFailure {
     pub checked: u64,
     pub returned: u64,
 }
+#[derive(Clone, Copy)]
+struct PreviousCompletion {
+    sequence: u64,
+    start: u64,
+    last_packet: u64,
+    callback: u64,
+    consumed: u64,
+}
 pub struct PoolSession {
+    previous: [[Option<PreviousCompletion>; DEPTH]; 2],
+    // Immutable session policy; storage capacity and the legacy probe stay at DEPTH.
+    depth: usize,
     pub submission_failure: Option<SubmissionFailure>,
     slots: [[Option<Flight>; DEPTH]; 2],
     feedback: [Option<Feedback>; FEEDBACK_SLOTS],
@@ -200,7 +222,13 @@ pub struct PoolSession {
 }
 impl PoolSession {
     pub fn new(epoch: u64, info: Info) -> Self {
+        Self::with_depth(epoch, info, DEPTH)
+    }
+    pub fn with_depth(epoch: u64, info: Info, depth: usize) -> Self {
+        assert!((2..=DEPTH).contains(&depth), "invalid queue depth");
         Self {
+            depth,
+            previous: [[None; DEPTH]; 2],
             submission_failure: None,
             slots: [[None; DEPTH]; 2],
             feedback: [None; FEEDBACK_SLOTS],
@@ -221,6 +249,9 @@ impl PoolSession {
             epoch,
         }
     }
+    pub fn queue_depth(&self) -> usize {
+        self.depth
+    }
     pub fn stop(&mut self, r: &'static str) {
         if self.reason.is_none() {
             self.reason = Some(r);
@@ -237,12 +268,17 @@ impl PoolSession {
         io: &mut impl StreamIo,
     ) {
         for d in 0..2 {
-            for slot in 0..DEPTH {
+            for slot in 0..self.depth {
                 let Some(flight) = self.slots[d][slot] else {
                     continue;
                 };
                 let mut completion = PoolCompletion::default();
                 let got = (ops.completion)(ctx, d as u32, slot as u32, &mut completion);
+                let consumed_ticks = if got == 1 && io.worker_timing() {
+                    (ops.now_ticks)(ctx)
+                } else {
+                    0
+                };
                 if got == 0 {
                     continue;
                 }
@@ -253,6 +289,15 @@ impl PoolSession {
                 if completion.ticket != flight.ticket {
                     self.stop("stale_completion_ticket");
                     continue;
+                }
+                if io.worker_timing() {
+                    self.previous[d][slot] = Some(PreviousCompletion {
+                        sequence: flight.seq as u64,
+                        start: flight.start,
+                        last_packet: completion.result.packets[ENTRIES - 1].ticks,
+                        callback: completion.result.callback_ticks,
+                        consumed: consumed_ticks,
+                    });
                 }
                 self.slots[d][slot] = None;
                 self.completed[d] += 1;
@@ -310,6 +355,7 @@ impl PoolSession {
                     self.feedback[at] = Some(Feedback {
                         seq: flight.seq,
                         completion: c,
+                        consumed_ticks,
                     });
                 }
             }
@@ -398,6 +444,8 @@ impl PoolSession {
             self.stop("clock_overflow");
             return;
         };
+        let observe_worker = io.worker_timing();
+        let mut pump_times = None;
         let began = Instant::now();
         let mut last_progress = began;
         let mut last_completed = self.completed;
@@ -413,7 +461,17 @@ impl PoolSession {
                 self.stop("stream_deadline");
                 break;
             }
+            let loop_enter_ticks = if observe_worker {
+                (ops.now_ticks)(ctx)
+            } else {
+                0
+            };
             self.poll(ops, ctx, records, io);
+            let poll_end_ticks = if observe_worker {
+                (ops.now_ticks)(ctx)
+            } else {
+                0
+            };
             if self.completed != last_completed {
                 last_completed = self.completed;
                 last_progress = Instant::now();
@@ -423,7 +481,7 @@ impl PoolSession {
             for d in 0..2 {
                 while limit.is_none_or(|count| self.next[d] < count) && self.reason.is_none() {
                     let seq = self.next[d];
-                    let slot = seq % DEPTH;
+                    let slot = seq % self.depth;
                     if self.slots[d][slot].is_some() {
                         break;
                     }
@@ -442,9 +500,54 @@ impl PoolSession {
                         self.stop("schedule_overflow");
                         break;
                     };
+                    let mut event = WorkerEvent {
+                        direction: d as u64,
+                        sequence: seq as u64,
+                        slot: slot as u64,
+                        ticket: (seq as u64).saturating_add(1),
+                        start_frame: start,
+                        loop_enter_ticks,
+                        poll_end_ticks,
+                        ..WorkerEvent::default()
+                    };
+                    if observe_worker {
+                        if let Some(p) = self.previous[d][slot] {
+                            event.flags |= wt::PREVIOUS;
+                            event.previous_sequence = p.sequence;
+                            event.previous_start_frame = p.start;
+                            event.previous_last_packet_ticks = p.last_packet;
+                            event.previous_callback_ticks = p.callback;
+                            event.previous_consumed_ticks = p.consumed;
+                        }
+                        if let Some(f) = feedback {
+                            event.flags |= wt::FEEDBACK;
+                            event.feedback_sequence = f.seq as u64;
+                            event.feedback_last_packet_ticks =
+                                f.completion.packets[ENTRIES - 1].ticks;
+                            event.feedback_callback_ticks = f.completion.callback_ticks;
+                            event.feedback_consumed_ticks = f.consumed_ticks;
+                        }
+                        if let Some((begin, end)) = pump_times {
+                            event.flags |= wt::PUMP;
+                            event.pump_enter_ticks = begin;
+                            event.pump_exit_ticks = end;
+                        }
+                        event.check_begin_ticks = (ops.now_ticks)(ctx);
+                    }
                     let mut now = Clock::default();
                     let clock_result = (ops.base.clock)(ctx, &mut now);
+                    if observe_worker {
+                        event.check_end_ticks = (ops.now_ticks)(ctx);
+                        event.check_status = clock_result as i64 as u64;
+                        if clock_result == 0 {
+                            event.flags |= wt::CHECKED;
+                            event.checked_frame = now.frame;
+                        }
+                    }
                     if clock_result != 0 || !schedule_valid(now.frame, start) {
+                        if observe_worker {
+                            io.worker_event(event);
+                        }
                         self.submission_failure = Some(SubmissionFailure {
                             status: clock_result,
                             direction: d as u32,
@@ -504,6 +607,10 @@ impl PoolSession {
                         record.crc_before = crc32(bytes);
                         self.next_sample += frames as u64;
                     }
+                    if observe_worker {
+                        event.flags |= wt::PREPARED;
+                        event.prepare_end_ticks = (ops.now_ticks)(ctx);
+                    }
                     // Tickets identify sequence within this epoch; native callback tokens
                     // additionally remain unique across context lifetimes on
                     // their owning callback/run-loop thread.
@@ -514,6 +621,10 @@ impl PoolSession {
                     let flight = Flight { seq, ticket, start };
                     record.flight = Some(flight);
                     record.admission_ticks = (ops.now_ticks)(ctx);
+                    if observe_worker {
+                        event.flags |= wt::SUBMITTED;
+                        event.submit_begin_ticks = record.admission_ticks;
+                    }
                     let r = (ops.submit)(
                         ctx,
                         d as u32,
@@ -522,11 +633,26 @@ impl PoolSession {
                         start,
                         record.lengths.as_ptr(),
                     );
+                    if observe_worker {
+                        event.submit_end_ticks = (ops.now_ticks)(ctx);
+                        event.submit_status = r as i64 as u64;
+                    }
                     record.submit = Some(r);
                     if r != 0 {
                         let mut returned = Clock::default();
-                        if (ops.base.clock)(ctx, &mut returned) == 0 {
+                        let query = (ops.base.clock)(ctx, &mut returned);
+                        if query == 0 {
                             record.submit_return_frame = returned.frame;
+                        }
+                        if observe_worker {
+                            event.flags |= wt::QUERIED;
+                            event.query_end_ticks = (ops.now_ticks)(ctx);
+                            event.return_clock_status = query as i64 as u64;
+                            if query == 0 {
+                                event.flags |= wt::RETURNED;
+                                event.returned_frame = returned.frame;
+                            }
+                            io.worker_event(event);
                         }
                         self.submission_failure = Some(SubmissionFailure {
                             status: r,
@@ -541,25 +667,51 @@ impl PoolSession {
                     }
                     self.slots[d][slot] = Some(flight);
                     self.next[d] += 1;
-                    if seq >= DEPTH {
+                    if seq >= self.depth {
                         self.reused[d] += 1;
                     }
                     self.max_pending[d] = self.max_pending[d].max(self.pending()[d]);
                     if d == 1 {
                         self.feedback[seq % FEEDBACK_SLOTS] = None;
-                        if io.submission_timing() {
+                        if io.submission_timing() || observe_worker {
                             let mut returned = Clock::default();
-                            let valid = (ops.base.clock)(ctx, &mut returned) == 0;
-                            if valid {
+                            let query = (ops.base.clock)(ctx, &mut returned);
+                            if query == 0 {
                                 record.submit_return_frame = returned.frame;
                             }
-                            io.submitted(start, now.frame, valid.then_some(returned.frame));
+                            if observe_worker {
+                                event.flags |= wt::QUERIED;
+                                event.query_end_ticks = (ops.now_ticks)(ctx);
+                                event.return_clock_status = query as i64 as u64;
+                                if query == 0 {
+                                    event.flags |= wt::RETURNED;
+                                    event.returned_frame = returned.frame;
+                                }
+                            }
+                            if io.submission_timing() {
+                                io.submitted(
+                                    start,
+                                    now.frame,
+                                    (query == 0).then_some(returned.frame),
+                                );
+                            }
                         }
+                    }
+                    if observe_worker {
+                        io.worker_event(event);
                     }
                 }
             }
             if self.pending().iter().any(|&n| n > 0) {
+                let begin = if observe_worker {
+                    (ops.now_ticks)(ctx)
+                } else {
+                    0
+                };
                 (ops.base.pump)(ctx);
+                if observe_worker {
+                    pump_times = Some((begin, (ops.now_ticks)(ctx)));
+                }
             } else if limit.is_none_or(|count| self.completed[1] < count) && self.reason.is_none() {
                 self.stop("pipeline_stalled");
             }
@@ -606,6 +758,18 @@ mod tests {
     #[test]
     fn checksum_standard_vector() {
         assert_eq!(crc32(b"123456789"), 0xcbf43926);
+    }
+    #[test]
+    fn queue_depth_rejects_unsupported_native_counts() {
+        for depth in [0, 1, DEPTH + 1, usize::MAX] {
+            assert!(std::panic::catch_unwind(|| PoolSession::with_depth(
+                1,
+                Info::default(),
+                depth
+            ))
+            .is_err());
+        }
+        assert_eq!(PoolSession::new(1, Info::default()).queue_depth(), DEPTH);
     }
     #[test]
     fn callback_layout() {

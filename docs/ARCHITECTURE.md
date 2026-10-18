@@ -52,7 +52,11 @@ passed short physical loopback at actual 64–4096-frame callbacks on the deskto
 Ultra. A subsequent [observation sweep](TIMING-OBSERVATION.md) measured publication,
 preparation and capture margins. The output-safety reduction to 3072 then passed the same short loopback sweep,
 measuring a 21.333 ms improvement at 64 frames. Wider hardware and application
-qualification is still required.
+qualification is still required. The [queue experiment](QUEUE-MODEL.md)
+kept native packet layouts fixed and gave each Rust pool session an immutable
+active depth. Its three-slot hardware sweep missed the submission-headroom gate;
+live defaults and standalone diagnostics now both select four slots. The frozen
+three-slot candidate remains available for investigation, without qualification.
 
 ## Configuration and controls
 
