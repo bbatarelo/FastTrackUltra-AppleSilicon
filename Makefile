@@ -20,7 +20,12 @@ help:
 	@echo 'make package     Build local macOS install and uninstall packages'
 	@echo 'make test        Run the protocol/transport regression tests'
 	@echo 'make test-hal    Run HAL boundary sanitizer tests (no hardware)'
+	@echo 'make test-hal-independent  Same HAL boundary/hotplug tests on the independent session (no hardware)'
 	@echo 'make test-install  Test deployment in temporary directories (no system changes)'
+	@echo 'make test-prototype-4ms  Build/test the isolated 4 ms prototype (no hardware)'
+	@echo 'make test-prototype-4ms-ten-slot  Build/test the isolated ten-slot prototype (no hardware)'
+	@echo 'make test-prototype-4ms-deadline  Test bounded deadline scheduling (no hardware)'
+	@echo 'make test-prototype-4ms-ready  Build/test bounded PCM preparation (no hardware)'
 	@echo 'make doctor      Check source-build prerequisites'
 $(RUST_LIB): $(RUST_SOURCES)
 	cargo build --release --locked --offline -p ftu-stream
@@ -33,7 +38,7 @@ test:
 
 BUNDLE := $(BUILD)/FastTrackUltra.driver
 driver: doctor $(BUNDLE)/Contents/MacOS/FastTrackUltra
-$(BUNDLE)/Contents/MacOS/FastTrackUltra: $(BUILD)/build_identity.h driver/plugin.c driver/Info.plist LICENSE scripts/sign.sh $(NATIVE) shared/ftu_live.h shared/ftu_native.h $(RUST_LIB)
+$(BUNDLE)/Contents/MacOS/FastTrackUltra: $(BUILD)/baseline-transport.json $(BUILD)/build_identity.h driver/plugin.c driver/Info.plist LICENSE scripts/sign.sh $(NATIVE) shared/ftu_live.h shared/ftu_native.h $(RUST_LIB)
 	rm -rf $(BUNDLE)
 	mkdir -p $(BUNDLE)/Contents/MacOS $(BUNDLE)/Contents/Resources
 	cp $(BUILD)/Info.plist $(BUNDLE)/Contents/Info.plist
@@ -44,8 +49,19 @@ $(BUNDLE)/Contents/MacOS/FastTrackUltra: $(BUILD)/build_identity.h driver/plugin
 $(BUILD)/test-hal-boundary: tests/hal-boundary.c driver/plugin.c shared/ftu_live.h $(RUST_LIB) | $(BUILD)
 	clang $(CFLAGS) -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -o $@ tests/hal-boundary.c $(RUST_LIB) $(FRAMEWORKS)
 .PHONY: test-hal
-test-hal: $(BUILD)/test-hal-boundary
+$(BUILD)/test-hotplug-discovery: tests/hotplug-discovery.c $(NATIVE) shared/ftu_live.h shared/ftu_native.h $(RUST_LIB) | $(BUILD)
+	clang $(CFLAGS) -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -o $@ tests/hotplug-discovery.c $(RUST_LIB) $(FRAMEWORKS)
+test-hal: $(BUILD)/test-hal-boundary $(BUILD)/test-hotplug-discovery
 	$(BUILD)/test-hal-boundary
+	$(BUILD)/test-hotplug-discovery
+# Same boundary and hotplug regressions against the independent-4ms session.
+# Separate Cargo artifacts; never the candidate bundle's build directory.
+HAL_INDEPENDENT := $(BUILD)/hal-independent
+.PHONY: test-hal-independent
+test-hal-independent: | $(BUILD)
+	CARGO_TARGET_DIR=$(HAL_INDEPENDENT)/target MACOSX_DEPLOYMENT_TARGET=14.0 cargo build --release --locked --offline -p ftu-stream --no-default-features --features independent-4ms
+	clang $(CFLAGS) -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -mmacosx-version-min=14.0 -DFTU_INDEPENDENT -o $(HAL_INDEPENDENT)/test-hal-boundary tests/hal-boundary.c tools/ftu-probe/completion_route.c $(HAL_INDEPENDENT)/target/release/libftu_stream.a $(FRAMEWORKS)
+	$(HAL_INDEPENDENT)/test-hal-boundary
 
 .PHONY: FORCE
 FORCE:
@@ -101,3 +117,50 @@ test-app:
 
 test-fixtures:
 	python3 tests/test_fixtures.py
+
+# Deliberately separate Cargo artifacts: ordinary make install stays baseline.
+.PHONY: prototype-4ms test-prototype-4ms
+prototype-4ms:
+	python3 scripts/build_prototype.py
+test-prototype-4ms:
+	python3 scripts/build_prototype.py --test
+
+$(BUILD)/transport-profile: tests/transport-profile.c shared/ftu_native.h $(RUST_LIB) | $(BUILD)
+	clang $(CFLAGS) -o $@ tests/transport-profile.c $(RUST_LIB) $(FRAMEWORKS)
+$(BUILD)/baseline-transport.json: $(BUILD)/transport-profile
+	$(BUILD)/transport-profile 8 4 > $@.tmp
+	mv $@.tmp $@
+
+.PHONY: prototype-4ms-ten-slot test-prototype-4ms-ten-slot
+prototype-4ms-ten-slot:
+	python3 scripts/build_prototype.py --slots 10
+test-prototype-4ms-ten-slot:
+	python3 scripts/build_prototype.py --slots 10 --test
+
+.PHONY: prototype-4ms-ready test-prototype-4ms-ready
+prototype-4ms-ready:
+	python3 scripts/build_prototype.py --slots 10 --pcm-ready
+test-prototype-4ms-ready:
+	python3 scripts/build_prototype.py --slots 10 --pcm-ready --test
+
+.PHONY: prototype-4ms-deadline test-prototype-4ms-deadline
+prototype-4ms-deadline:
+	python3 scripts/build_prototype.py --slots 10 --pcm-ready --deadline
+test-prototype-4ms-deadline:
+	python3 scripts/build_prototype.py --slots 10 --pcm-ready --deadline --test
+
+# Explicit developer hardware candidate; ordinary make install stays baseline.
+.PHONY: independent-driver test-independent
+independent-driver:
+	python3 scripts/build_independent.py
+test-independent:
+	python3 tools/ftu-probe/test_live_completion.py
+
+# A recovered stream is still a failed uninterrupted-audio qualification run.
+$(BUILD)/test-session-guard: tests/session-guard.c tools/hal-check/session_guard.h | $(BUILD)
+	clang $(CFLAGS) -O1 -fsanitize=address,undefined -o $@ $<
+.PHONY: test-session-guard
+test-session-guard: $(BUILD)/test-session-guard
+	$(BUILD)/test-session-guard
+test-loopback: test-session-guard
+$(BUILD)/hal-check $(BUILD)/hal-scenarios $(BUILD)/hal-loopback $(BUILD)/hal-soak $(BUILD)/hal-observe: tools/hal-check/session_guard.h

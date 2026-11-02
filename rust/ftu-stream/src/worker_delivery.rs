@@ -8,7 +8,7 @@ use crate::{
     worker_timing::{self as wt, Event},
 };
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
-pub const HEADER: usize = 28;
+pub const HEADER: usize = 31;
 pub const METRICS: usize = 8;
 pub const BUCKETS: usize = 18;
 pub const HIST: usize = 29;
@@ -107,10 +107,22 @@ impl Delivery {
         self.set(5, STEADY_AFTER);
         self.end(g);
     }
+    #[cfg(test)]
     pub fn configure(&self, numer: u32, denom: u32) {
+        self.configure_geometry(numer, denom, crate::transport::BASELINE);
+    }
+    pub fn configure_geometry(
+        &self,
+        numer: u32,
+        denom: u32,
+        geometry: crate::transport::Transport,
+    ) {
         let Some(g) = self.begin() else { return };
         self.set(3, numer.into());
         self.set(4, denom.into());
+        self.set(28, geometry.slots() as u64);
+        self.set(29, geometry.block_ms());
+        self.set(30, geometry.entries() as u64);
         self.end(g);
     }
     fn ns(&self, begin: u64, end: u64) -> Option<u64> {
@@ -189,7 +201,7 @@ impl Delivery {
         self.inc(6 + d);
         let ordinal = self.get(6).saturating_add(self.get(7));
         let p = c.pump;
-        let stamp = c.result.packets[crate::scheduler::ENTRIES - 1].ticks;
+        let stamp = c.last_packet_ticks();
         let callback = c.result.callback_ticks;
         let record = [
             ordinal,
@@ -371,7 +383,7 @@ impl Delivery {
                 continue;
             }
             let mut header = self.load::<HEADER>(0);
-            header[0] = 1;
+            header[0] = 2;
             header[1] = 1;
             header[5] = STEADY_AFTER;
             let s = Snapshot {
@@ -554,7 +566,7 @@ mod tests {
         assert_eq!(t.snapshot().header[DROPPED], 1);
         t.generation.store(3, SeqCst);
         assert_eq!(t.snapshot().header[1], 0);
-        assert_eq!(std::mem::size_of::<Snapshot>(), 6272);
+        assert_eq!(std::mem::size_of::<Snapshot>(), 6296);
     }
     #[test]
     fn reader_never_mixes_epochs_records_or_histogram_totals() {

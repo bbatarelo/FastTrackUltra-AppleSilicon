@@ -5,6 +5,7 @@
 | `make check` / `build/hal-check` | Loaded build, device geometry and health | No, without explicit tone/silence options |
 | [`build/hal-check --worker-timing`](../docs/WORKER-TIMING.md) | Read coherent, sample-free USB-worker stage records when `ftuW` is available | No |
 | [`build/hal-check --delivery`](../docs/DELIVERY-OBSERVATION.md) | Read sample-free completion histograms, callback/pump links and worker CPU/policy observations when `ftuD` is available | No |
+| [`build/hal-check --retry`](../docs/RETRY-COST-OBSERVATION.md) | Read coherent per-epoch PCM deferral/fallback and retry-duration counters when `ftuR` is available | No |
 | `build/hal-check --timing` | Read-only playback/capture margins when the installed build exposes `ftuT` | No |
 | `build/hal-scenarios` | Bounded buffer/read-back and multi-client experiments | Yes, silent streaming |
 | [`hal-loopback`](hal-loopback/README.md) | Output 3 → selected input 3/4; raw/timestamp RTL and actual callbacks | Yes, explicit prepared run; saves selected input |
@@ -35,3 +36,16 @@ The [standalone run-loop study](runloop-study/README.md) compares two-port Mach
 message delivery with normal/requested realtime scheduling and optional wait
 observers. It does not access USB, audio or the driver. Its results are a control
 experiment, not hardware qualification.
+
+### Native shutdown evidence
+
+`build/hal-check --shutdown` reads `ftuQ` without starting audio or opening USB.
+It reports the last independent native shutdown, including actual slot ownership,
+abort results, join/destruction and per-operation cleanup status. Pair it with
+`--runtime-fault`, `--recovery`, `--hotplug` and the ordinary status output.
+See [the shutdown field guide](../docs/DISCONNECT-RECOVERY.md).
+
+`python3 tools/ftu-probe/test_live_route.py` runs the actual native adapter with
+injected interfaces under ASan/UBSan; `--sanitizer thread` uses C TSan. It never
+opens USB or installs a driver. The linked Rust/C suite tests both languages
+under TSan separately.

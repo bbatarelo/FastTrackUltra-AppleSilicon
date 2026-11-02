@@ -12,11 +12,22 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include "session_guard.h"
 static OSStatus get(AudioObjectID id,UInt32 sel,UInt32 scope,UInt32 size,void *out){
     AudioObjectPropertyAddress a={sel,scope,kAudioObjectPropertyElementMain};
     return AudioObjectGetPropertyData(id,&a,0,NULL,&size,out);
 }
 static CFStringRef string(AudioObjectID id,UInt32 selector){CFStringRef v=NULL;if(get(id,selector,kAudioObjectPropertyScopeGlobal,sizeof v,&v))return NULL;return v;}
+static bool status_text(AudioDeviceID id,char *text,size_t size){
+    CFStringRef s=string(id,'ftuS');if(!s)return false;
+    bool ok=CFStringGetCString(s,text,(CFIndex)size,kCFStringEncodingUTF8);CFRelease(s);return ok;
+}
+static struct session_guard guard_before_start(AudioDeviceID id){
+    char text[4096];return status_text(id,text,sizeof text)?session_guard_before_start(text):(struct session_guard){0,false};
+}
+static bool guard_matches(AudioDeviceID id,struct session_guard g){
+    char text[4096];return status_text(id,text,sizeof text)&&session_guard_matches(g,text);
+}
 static bool status_is(AudioObjectID id,const char *phase){
     CFStringRef s=string(id,'ftuS');char text[4096];if(!s)return false;
     bool ok=CFStringGetCString(s,text,sizeof text,kCFStringEncodingUTF8);CFRelease(s);
@@ -107,12 +118,20 @@ static bool describe(AudioDeviceID device){
     return ok;
 }
 int main(int argc,char **argv){
-    unsigned seconds=0;bool tone=false,timing=false,worker=false,delivery=false;
-    if(argc==2 && strcmp(argv[1],"--delivery")==0)delivery=true;
+    unsigned seconds=0;bool tone=false,timing=false,worker=false,delivery=false,pumps=false,failure=false,startup=false,retry=false,hotplug=false,runtime=false,recovery=false,shutdown=false;
+    if(argc==2 && strcmp(argv[1],"--runtime-fault")==0)runtime=true;
+    else if(argc==2 && strcmp(argv[1],"--recovery")==0)recovery=true;
+    else if(argc==2 && strcmp(argv[1],"--shutdown")==0)shutdown=true;
+    else if(argc==2 && strcmp(argv[1],"--hotplug")==0)hotplug=true;
+    else if(argc==2 && strcmp(argv[1],"--retry")==0)retry=true;
+    else if(argc==2 && strcmp(argv[1],"--startup")==0)startup=true;
+    else if(argc==2 && strcmp(argv[1],"--first-failure")==0)failure=true;
+    else if(argc==2 && strcmp(argv[1],"--pumps")==0)pumps=true;
+    else if(argc==2 && strcmp(argv[1],"--delivery")==0)delivery=true;
     else if(argc==2 && strcmp(argv[1],"--worker-timing")==0)worker=true;
     else if(argc==2 && strcmp(argv[1],"--timing")==0)timing=true;
     else if(argc==2 && strcmp(argv[1],"--tone")==0){tone=true;seconds=12;}
-    else if(argc==3 && strcmp(argv[1],"--silence")==0){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(!*argv[2] || *end || n<1 || n>120)return 2;seconds=(unsigned)n;}else if(argc!=1){fprintf(stderr,"Usage: %s [--silence 1..120 | --tone | --timing | --worker-timing | --delivery]\n",argv[0]);return 2;}
+    else if(argc==3 && strcmp(argv[1],"--silence")==0){char *end=NULL;unsigned long n=strtoul(argv[2],&end,10);if(!*argv[2] || *end || n<1 || n>120)return 2;seconds=(unsigned)n;}else if(argc!=1){fprintf(stderr,"Usage: %s [--silence 1..120 | --tone | --timing | --worker-timing | --delivery | --pumps | --first-failure | --startup | --retry | --hotplug | --runtime-fault | --recovery | --shutdown]\n",argv[0]);return 2;}
     AudioObjectPropertyAddress a={kAudioHardwarePropertyDevices,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};UInt32 bytes=0;
     if(AudioObjectGetPropertyDataSize(kAudioObjectSystemObject,&a,0,NULL,&bytes))return 1;
     AudioDeviceID *devices=calloc(1,bytes?bytes:1);if(!devices)return 1;
@@ -120,12 +139,17 @@ int main(int argc,char **argv){
     AudioDeviceID selected=0;unsigned matches=0;
     for(UInt32 i=0;i<bytes/sizeof(*devices);i++){CFStringRef uid=string(devices[i],kAudioDevicePropertyDeviceUID);if(uid){if(CFStringHasPrefix(uid,CFSTR("net.batarelo.FastTrackUltra:"))){selected=devices[i];matches++;}CFRelease(uid);}}
     free(devices);if(matches!=1){fprintf(stderr,"Expected one published FastTrackUltra device; found %u.\n",matches);return 1;}
-    if(!describe(selected))return 1;if(delivery)return print_string(selected,'ftuD',"delivery")?0:1;if(worker)return print_string(selected,'ftuW',"worker timing")?0:1;if(timing)return print_string(selected,'ftuT',"timing")?0:1;if(!seconds)return 0;
+    if(!describe(selected))return 1;
+    /* Read-only: ftuE/ftuA are property reads; recovery is never requested here. */
+    if(shutdown)return print_string(selected,'ftuQ',"shutdown")?0:1;
+    if(runtime)return print_string(selected,'ftuE',"runtime fault")?0:1;if(recovery)return print_string(selected,'ftuA',"recovery")?0:1;
+    if(hotplug)return print_string(selected,'ftuH',"hotplug")?0:1;if(retry)return print_string(selected,'ftuR',"retry")?0:1;if(startup)return print_string(selected,'ftuI',"startup")?0:1;if(failure)return print_string(selected,'ftuF',"first failure")?0:1;if(pumps)return print_string(selected,'ftuP',"pumps")?0:1;if(delivery)return print_string(selected,'ftuD',"delivery")?0:1;if(worker)return print_string(selected,'ftuW',"worker timing")?0:1;if(timing)return print_string(selected,'ftuT',"timing")?0:1;if(!seconds)return 0;
     struct counters c={0};float *table=tone?make_tone():NULL;if(tone && !table)return 1;c.tone=table;AudioDeviceIOProcID proc=NULL;
     OSStatus created=AudioDeviceCreateIOProcID(selected,io,&c,&proc);if(created){fprintf(stderr,"CreateIOProc failed: %d\n",created);free(table);return 1;}
+    struct session_guard guard=guard_before_start(selected);
     OSStatus started=AudioDeviceStart(selected,proc);if(started){fprintf(stderr,"Start failed: %d\n",started);print_string(selected,'ftuS',"start failure status");AudioDeviceDestroyIOProcID(selected,proc);free(table);return 1;}
-    bool healthy=true;
-    for(unsigned s=0;s<seconds;s++){struct timespec pause={1,0};nanosleep(&pause,NULL);if(!print_string(selected,'ftuS',"running status") || !status_is(selected,"\"phase\":2") || atomic_load(&c.invalid) || atomic_load(&c.gaps)){healthy=false;break;}fflush(stdout);}
+    bool healthy=guard_matches(selected,guard);
+    for(unsigned s=0;s<seconds;s++){struct timespec pause={1,0};nanosleep(&pause,NULL);if(!guard_matches(selected,guard) || !print_string(selected,'ftuS',"running status") || !status_is(selected,"\"phase\":2") || atomic_load(&c.invalid) || atomic_load(&c.gaps)){healthy=false;break;}fflush(stdout);}
     OSStatus stopped=AudioDeviceStop(selected,proc),destroyed=AudioDeviceDestroyIOProcID(selected,proc);
     print_string(selected,'ftuS',"stopped status");
     uint64_t calls=atomic_load(&c.calls),frames=atomic_load(&c.frames),invalid=atomic_load(&c.invalid),gaps=atomic_load(&c.gaps);
@@ -134,5 +158,5 @@ int main(int argc,char **argv){
     if(tone)printf("Tone: pairs=%u, peak_limit=0.01, nonzero_left=%llu, nonzero_right=%llu, other_channels=zero\n",TONE_PAIRS,(unsigned long long)left,(unsigned long long)right);
     /* Only release callback storage after both stop and IOProc destruction. */
     if(!stopped && !destroyed)free(table);
-    return !healthy || !status_is(selected,"\"phase\":0") || stopped || destroyed || calls<seconds*10 || invalid || gaps || (tone && (left<140000 || right<140000)) ? 1:0;
+    return !healthy || !guard_matches(selected,guard) || !status_is(selected,"\"phase\":0") || stopped || destroyed || calls<seconds*10 || invalid || gaps || (tone && (left<140000 || right<140000)) ? 1:0;
 }

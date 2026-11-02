@@ -8,5 +8,17 @@ publish = false
 [lib]
 crate-type = ["staticlib", "rlib"]
 
+[features]
+default = []
+# Offline prototype only; standard make/install continues to build the baseline.
+prototype-4ms = []
+prototype-4ms-ten-slot = []
+prototype-4ms-ready = []
+prototype-4ms-deadline = []
+# Linked native/Rust offline fixture only; no driver factory or USB discovery.
+native-integration = []
+# Experimental hardware candidate; explicitly separate from default installation.
+independent-4ms = []
+
 [dependencies]
 ftu-protocol = { path = "../ftu-protocol" }

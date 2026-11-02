@@ -2,7 +2,7 @@
 //! Live queue depth is explicit; IN-derived packet counts are still replayed
 //! 64 ms later, with immutable submitted payloads. Standalone probes retain
 //! their original four-slot policy.
-use crate::scheduler::{DEPTH, ENTRIES, FEEDBACK_DELAY_MS};
+use crate::{scheduler::FEEDBACK_DELAY_MS, transport::LIVE};
 
 pub const CHANNELS: usize = 8;
 pub const RATE: u32 = 48_000;
@@ -16,10 +16,10 @@ pub const DEFAULT_BUFFER_FRAMES: u32 = 256;
 pub const INPUT_SAFETY: u32 = 1024;
 // Single-variable output-safety candidate; USB ownership/queue stay qualified.
 // Prediction, evidence limits and gates: docs/PLACEMENT-MODEL.md.
-pub const LIVE_QUEUE_DEPTH: usize = 4;
+pub const LIVE_QUEUE_DEPTH: usize = LIVE.slots();
 pub const OUTPUT_SAFETY: u32 = 2560;
 pub const PLAYBACK_OFFSET: u64 = FEEDBACK_DELAY_MS * RATE as u64 / 1000;
-pub const USB_BLOCK_MAX_FRAMES: usize = ENTRIES * 13;
+pub const USB_BLOCK_MAX_FRAMES: usize = LIVE.max_frames();
 pub const RING_FRAMES: usize = 32_768;
 pub const WRITE_AHEAD_FRAMES: u64 = (RING_FRAMES / 2) as u64;
 
@@ -27,7 +27,7 @@ pub const WRITE_AHEAD_FRAMES: u64 = (RING_FRAMES / 2) as u64;
 // Include two maximum client buffers and a full USB completion batch in the
 // future budget; actual HAL geometry must still be measured on each OS.
 const _: () = assert!(ZTS_PERIOD >= 10_923);
-const _: () = assert!(LIVE_QUEUE_DEPTH >= 2 && LIVE_QUEUE_DEPTH <= DEPTH);
+const _: () = assert!(LIVE_QUEUE_DEPTH >= 2 && LIVE_QUEUE_DEPTH <= crate::transport::MAX_SLOTS);
 const _: () = assert!(MIN_BUFFER_FRAMES <= DEFAULT_BUFFER_FRAMES);
 const _: () = assert!(DEFAULT_BUFFER_FRAMES as usize <= MAX_BUFFER_FRAMES);
 const _: () = assert!(USB_BLOCK_MAX_FRAMES <= MAX_BUFFER_FRAMES);
@@ -61,7 +61,7 @@ mod tests {
             PLAYBACK_OFFSET,
             crate::scheduler::FEEDBACK_DELAY_MS * u64::from(RATE) / 1000
         );
-        assert_eq!(ENTRIES / 8, 8);
+        assert_eq!(LIVE.entries() / 8, LIVE.block_ms() as usize);
         for seq in [0, 1, 8, 1000] {
             let input = crate::scheduler::start_frame(100, seq, false).unwrap();
             let output = crate::scheduler::start_frame(100, seq, true).unwrap();

@@ -155,6 +155,10 @@ pub struct Snapshot {
     pub timebase_numer: u64,
     pub timebase_denom: u64,
     pub queue_depth: u64,
+    pub block_ms: u64,
+    pub entries: u64,
+    pub feedback_slots: u64,
+    pub replay_ms: u64,
     pub threshold_ms: u64,
     pub observed: u64,
     pub dropped: u64,
@@ -173,6 +177,8 @@ pub struct WorkerTiming {
     numer: AtomicU64,
     denom: AtomicU64,
     depth: AtomicU64,
+    block_ms: AtomicU64,
+    history: AtomicU64,
     observed: AtomicU64,
     dropped: AtomicU64,
     late_seen: AtomicU64,
@@ -190,6 +196,8 @@ impl WorkerTiming {
             numer: AtomicU64::new(0),
             denom: AtomicU64::new(0),
             depth: AtomicU64::new(0),
+            block_ms: AtomicU64::new(0),
+            history: AtomicU64::new(0),
             observed: AtomicU64::new(0),
             dropped: AtomicU64::new(0),
             late_seen: AtomicU64::new(0),
@@ -228,6 +236,8 @@ impl WorkerTiming {
             &self.numer,
             &self.denom,
             &self.depth,
+            &self.block_ms,
+            &self.history,
             &self.observed,
             &self.dropped,
             &self.late_seen,
@@ -247,11 +257,27 @@ impl WorkerTiming {
         }
         self.end(g);
     }
+    #[cfg(test)]
     pub fn configure(&self, numer: u32, denom: u32, depth: usize) {
+        self.configure_geometry(
+            numer,
+            denom,
+            crate::transport::Transport::new(8, depth).unwrap(),
+        );
+    }
+    pub fn configure_geometry(
+        &self,
+        numer: u32,
+        denom: u32,
+        geometry: crate::transport::Transport,
+    ) {
+        let depth = geometry.slots();
         let Some(g) = self.begin() else { return };
         self.numer.store(u64::from(numer), SeqCst);
         self.denom.store(u64::from(denom), SeqCst);
         self.depth.store(depth as u64, SeqCst);
+        self.block_ms.store(geometry.block_ms(), SeqCst);
+        self.history.store(geometry.history() as u64, SeqCst);
         self.end(g);
     }
     pub fn observe(&self, mut e: Event) {
@@ -279,9 +305,9 @@ impl WorkerTiming {
                 }
             }
         }
-        // Trigger is observation only: nominal queue lead minus one 8 ms block.
+        // Trigger is observation only: nominal queue lead minus one active block.
         // Keep faults even during startup; IN has pre-check lead, OUT post-query.
-        let threshold = self.depth.load(SeqCst).saturating_sub(2) * 8;
+        let threshold = self.depth.load(SeqCst).saturating_sub(2) * self.block_ms.load(SeqCst);
         let fault = e.check_status != 0 || e.submit_status != 0 || e.return_clock_status != 0;
         if fault || (steady && e.lead().is_some_and(|lead| lead < threshold as i64)) {
             let n = self.late_seen.load(SeqCst);
@@ -302,13 +328,17 @@ impl WorkerTiming {
             let late = self.late_seen.load(SeqCst);
             let depth = self.depth.load(SeqCst);
             let s = Snapshot {
-                version: 1,
+                version: 2,
                 valid: 1,
                 epoch: self.epoch.load(SeqCst),
                 timebase_numer: self.numer.load(SeqCst),
                 timebase_denom: self.denom.load(SeqCst),
                 queue_depth: depth,
-                threshold_ms: depth.saturating_sub(2) * 8,
+                block_ms: self.block_ms.load(SeqCst),
+                entries: self.block_ms.load(SeqCst) * 8,
+                feedback_slots: self.history.load(SeqCst),
+                replay_ms: if depth > 0 { 64 } else { 0 },
+                threshold_ms: depth.saturating_sub(2) * self.block_ms.load(SeqCst),
                 observed: n,
                 dropped: self.dropped.load(SeqCst),
                 recent_overwritten: n.saturating_sub(RECENT as u64),
@@ -349,7 +379,7 @@ mod tests {
     #[test]
     fn layout_retention_overflow_and_startup_are_explicit() {
         assert_eq!(std::mem::size_of::<Event>(), 256);
-        assert_eq!(std::mem::size_of::<Snapshot>(), 6760);
+        assert_eq!(std::mem::size_of::<Snapshot>(), 6792);
         let t = WorkerTiming::new();
         t.reset(3);
         t.configure(125, 3, 4);

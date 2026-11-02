@@ -27,7 +27,7 @@ def analyze(snapshot, expected_epoch=None, require_observed=True):
     def integer(n): return type(n) is int and 0<=n<=2**64-1
     try:
         require(isinstance(snapshot,dict),'missing_snapshot')
-        require(snapshot['version']==1 and snapshot['valid']==1,'unsupported_or_incoherent_snapshot')
+        require(snapshot['version'] in (1,2) and snapshot['valid']==1,'unsupported_or_incoherent_snapshot')
         for k in ('epoch','timebase_numer','timebase_denom','queue_depth','threshold_ms','observed','dropped','recent_overwritten','late_seen','late_retained','late_overflow'):
             require(integer(snapshot[k]),'invalid_counter_'+k)
         if expected_epoch is not None: require(snapshot['epoch']==expected_epoch,'epoch_mismatch')
@@ -37,10 +37,21 @@ def analyze(snapshot, expected_epoch=None, require_observed=True):
         require(snapshot['late_retained']==min(snapshot['late_seen'],8),'late_count_mismatch')
         require(snapshot['late_overflow']==max(snapshot['late_seen']-8,0),'late_count_mismatch')
         require(snapshot['late_seen']<=n,'late_exceeds_observed')
-        if n:
-            require(snapshot['timebase_numer']>0 and snapshot['timebase_denom']>0,'missing_timebase')
-            require(2<=snapshot['queue_depth']<=4,'unsupported_depth')
-            require(snapshot['threshold_ms']==(snapshot['queue_depth']-2)*8,'threshold_mismatch')
+        block_ms=8;max_depth=4
+        geometry_keys=('block_ms','entries','feedback_slots','replay_ms')
+        configured=n>0 or snapshot['queue_depth']>0
+        if snapshot['version']==2:
+            for key in geometry_keys:require(integer(snapshot[key]),'invalid_geometry_'+key)
+            configured=configured or any(snapshot[k] for k in geometry_keys)
+            if configured:
+                block_ms=snapshot['block_ms'];max_depth=32
+                require(block_ms in (1,2,4,8) and snapshot['entries']==8*block_ms and snapshot['replay_ms']==64,'invalid_geometry')
+                needed=64//block_ms+2*snapshot['queue_depth']+1
+                require(snapshot['feedback_slots']==1<<(needed-1).bit_length(),'invalid_history')
+        if n:require(snapshot['timebase_numer']>0 and snapshot['timebase_denom']>0,'missing_timebase')
+        if configured:
+            require(2<=snapshot['queue_depth']<=max_depth,'unsupported_depth')
+            require(snapshot['threshold_ms']==(snapshot['queue_depth']-2)*block_ms,'threshold_mismatch')
         scale=snapshot['timebase_numer']/snapshot['timebase_denom']/1e6 if snapshot['timebase_denom'] else None
         seen={}
         for bank,capacity in (('worst',2),('recent',16),('late',8)):

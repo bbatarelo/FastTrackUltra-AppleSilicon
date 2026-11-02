@@ -4,28 +4,62 @@ use crate::{
     clock::SampleClock,
     native::*,
     ok,
+    output_admission::{OutputPolicy, MIN_LEAD_MS},
     scheduler::*,
+    submission_order::{self, SubmissionOrder},
+    transport::{Transport, POOL_ABI_VERSION},
     worker_timing::{self as wt, Event as WorkerEvent},
 };
 use std::{
     ffi::c_void,
     time::{Duration, Instant},
 };
+#[cfg(test)]
 pub const FEEDBACK_SLOTS: usize = 32;
 #[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PoolCompletion {
     pub ticket: u64,
+    pub packet_count: u32,
+    pub reserved: u32,
     pub result: Completion,
     pub pump: Pump,
 }
+impl Default for PoolCompletion {
+    fn default() -> Self {
+        Self {
+            ticket: 0,
+            packet_count: ENTRIES as u32,
+            reserved: 0,
+            result: Completion::default(),
+            pump: Pump::default(),
+        }
+    }
+}
+impl PoolCompletion {
+    pub fn last_packet_ticks(&self) -> u64 {
+        self.packet_count
+            .checked_sub(1)
+            .and_then(|i| self.result.packets.get(i as usize))
+            .map_or(0, |p| p.ticks)
+    }
+}
 #[repr(C)]
 pub struct PoolOps {
+    pub version: u32,
+    pub size: u32,
+    pub prepare_geometry: unsafe extern "C" fn(*mut c_void, *const Transport) -> i32,
     pub base: Ops,
     pub submit: unsafe extern "C" fn(*mut c_void, u32, u32, u64, u64, *const u16) -> i32,
     pub completion: unsafe extern "C" fn(*mut c_void, u32, u32, *mut PoolCompletion) -> i32,
     pub now_ticks: unsafe extern "C" fn(*mut c_void) -> u64,
     pub worker_sample: Option<unsafe extern "C" fn(*mut c_void, *mut WorkerSample)>,
+    pub last_pump: Option<unsafe extern "C" fn(*mut c_void, *mut PumpObservation)>,
+}
+impl PoolOps {
+    pub fn compatible(&self) -> bool {
+        self.version == POOL_ABI_VERSION && self.size as usize == std::mem::size_of::<Self>()
+    }
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Flight {
@@ -147,6 +181,7 @@ pub trait StreamIo {
     ) {
     }
     fn worker_sample(&mut self, _sample: WorkerSample) {}
+    fn worker_pump(&mut self, _pump: PumpObservation, _draining: bool) {}
     /// Optional observation on the USB owner thread. It never changes scheduling
     /// or turns a diagnostic clock-read error into a transport failure.
     fn submission_timing(&self) -> bool {
@@ -172,6 +207,13 @@ pub trait StreamIo {
     }
     fn clock(&mut self, _clock: crate::clock::ClockSnapshot) -> Result<(), &'static str> {
         Ok(())
+    }
+    fn output_retry(&mut self, _snapshot: &crate::output_retry::Snapshot) {}
+    /// Snapshot the exact requested sample interval into caller-owned staging.
+    /// False permits a retry on a later owner iteration; it is not a lost frame.
+    /// True must remain usable by output() without rereading a mutable HAL ring.
+    fn stage_output(&mut self, _first: u64, _frames: usize) -> Result<bool, &'static str> {
+        Ok(true)
     }
     fn output(
         &mut self,
@@ -212,13 +254,35 @@ struct PreviousCompletion {
     consumed: u64,
     pump: Pump,
 }
+#[derive(Clone)]
+pub struct CompletionFailure {
+    pub direction: usize,
+    pub reason: u32,
+    pub trace: Trace,
+}
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) struct DispatchResult {
+    pub progressed: bool,
+    pub service_begin: u64,
+}
 pub struct PoolSession {
-    previous: [[Option<PreviousCompletion>; DEPTH]; 2],
-    // Immutable session policy; storage capacity and the legacy probe stay at DEPTH.
+    #[cfg(test)]
+    ready_dispatch: Option<unsafe fn(*mut c_void, bool) -> DispatchResult>,
+    previous: [Vec<Option<PreviousCompletion>>; 2],
+    geometry: Transport,
     depth: usize,
+    output_policy: OutputPolicy,
+    submission_order: SubmissionOrder,
+    pub catch_up_rechecks: u64,
+    pub max_catch_up_attempts: usize,
+    pub retry: crate::output_retry::Tracker,
+    pub output_deferrals: u64,
+    pub output_deadline_fallbacks: u64,
     pub submission_failure: Option<SubmissionFailure>,
-    slots: [[Option<Flight>; DEPTH]; 2],
-    feedback: [Option<Feedback>; FEEDBACK_SLOTS],
+    pub completion_failure: Option<CompletionFailure>,
+    slots: [Vec<Option<Flight>>; 2],
+    feedback: Vec<Option<Feedback>>,
     pub next: [usize; 2],
     pub completed: [usize; 2],
     pub frames: [u64; 2],
@@ -240,13 +304,38 @@ impl PoolSession {
         Self::with_depth(epoch, info, DEPTH)
     }
     pub fn with_depth(epoch: u64, info: Info, depth: usize) -> Self {
-        assert!((2..=DEPTH).contains(&depth), "invalid queue depth");
+        assert!((2..=DEPTH).contains(&depth), "invalid legacy queue depth");
+        Self::with_geometry(
+            epoch,
+            info,
+            Transport::new(8, depth).expect("invalid queue depth"),
+        )
+    }
+    pub fn with_geometry(epoch: u64, info: Info, geometry: Transport) -> Self {
+        assert!(geometry.valid(), "invalid transport geometry");
+        let depth = geometry.slots();
         Self {
+            geometry,
             depth,
-            previous: [[None; DEPTH]; 2],
+            #[cfg(test)]
+            ready_dispatch: None,
+            output_policy: OutputPolicy::Eager,
+            submission_order: SubmissionOrder::InputFirst,
+            catch_up_rechecks: 0,
+            max_catch_up_attempts: 0,
+            retry: crate::output_retry::Tracker::new(
+                epoch,
+                OutputPolicy::Eager,
+                info.timebase_numer,
+                info.timebase_denom,
+            ),
+            output_deferrals: 0,
+            output_deadline_fallbacks: 0,
+            previous: std::array::from_fn(|_| vec![None; depth]),
             submission_failure: None,
-            slots: [[None; DEPTH]; 2],
-            feedback: [None; FEEDBACK_SLOTS],
+            completion_failure: None,
+            slots: std::array::from_fn(|_| vec![None; depth]),
+            feedback: vec![None; geometry.history()],
             next: [0; 2],
             completed: [0; 2],
             frames: [0; 2],
@@ -264,6 +353,110 @@ impl PoolSession {
             epoch,
         }
     }
+    #[cfg(any(test, not(feature = "independent-4ms")))]
+    pub fn with_output_policy(mut self, policy: OutputPolicy) -> Self {
+        assert!(policy == OutputPolicy::Eager || self.geometry == crate::transport::SHORTER_TEN);
+        self.output_policy = policy;
+        self.retry.snapshot.header[3] = policy as u64;
+        self
+    }
+    #[cfg(any(test, not(feature = "independent-4ms")))]
+    pub fn with_submission_order(mut self, order: SubmissionOrder) -> Self {
+        assert!(
+            order == SubmissionOrder::InputFirst
+                || (self.geometry == crate::transport::SHORTER_TEN
+                    && self.output_policy == OutputPolicy::WhenReady)
+        );
+        self.submission_order = order;
+        self
+    }
+    #[cfg(test)]
+    pub(crate) fn with_ready_dispatch(
+        mut self,
+        dispatch: unsafe fn(*mut c_void, bool) -> DispatchResult,
+    ) -> Self {
+        self.ready_dispatch = Some(dispatch);
+        self
+    }
+    /// Test-only hypothesis: publish between callback source deliveries.
+    /// Ten dispatches and 2 ms of callback service per group; the first optional
+    /// idle wait is outside that service budget, as in the retained fake.
+    /// The actual native source may batch callbacks; this is not an ABI promise.
+    #[cfg(test)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn service_ready(
+        &mut self,
+        ops: &PoolOps,
+        ctx: *mut c_void,
+        records: &mut Journal<'_>,
+        io: &mut impl StreamIo,
+        allow_wait: bool,
+        limit: Option<usize>,
+        stopped: &impl Fn() -> bool,
+    ) {
+        let Some(dispatch) = self.ready_dispatch else {
+            return;
+        };
+        let mut begin = None;
+        for i in 0..10 {
+            if self.reason.is_some() {
+                break;
+            }
+            if stopped() {
+                self.stop("signal");
+                break;
+            }
+            // Do not spend an urgent submission's remaining work allowance on
+            // more callback service. Every group still performs its first
+            // dispatch/probe, preserving the catch-up bound even when urgent.
+            if i > 0 {
+                let mut now = Clock::default();
+                if (ops.base.clock)(ctx, &mut now) != 0 {
+                    self.stop("clock_query_failed");
+                    break;
+                }
+                let base = self.anchor.frame.saturating_add(LEAD_MS);
+                if (0..2).any(|d| {
+                    self.eligible(d, limit)
+                        && self
+                            .geometry
+                            .start_frame(base, self.next[d], d == 1)
+                            .is_some_and(|start| {
+                                start.saturating_sub(now.frame)
+                                    <= if d == 1 { MIN_LEAD_MS + 2 } else { 2 }
+                            })
+                }) {
+                    break;
+                }
+            }
+            let result = dispatch(ctx, allow_wait && i == 0);
+            let began = *begin.get_or_insert(result.service_begin);
+            self.poll(ops, ctx, records, io, false);
+            // An empty probe terminates the group, including zero-cost probes.
+            if !result.progressed
+                || submission_order::recheck(
+                    0,
+                    began,
+                    (ops.now_ticks)(ctx),
+                    self.info.timebase_numer,
+                    self.info.timebase_denom,
+                )
+            {
+                break;
+            }
+        }
+    }
+    fn eligible(&self, d: usize, limit: Option<usize>) -> bool {
+        let seq = self.next[d];
+        limit.is_none_or(|count| seq < count)
+            && self.slots[d][seq % self.depth].is_none()
+            && (d == 0
+                || (self.clock_seq > seq
+                    && self.feedback[seq % self.geometry.history()].is_some_and(|f| f.seq == seq)))
+    }
+    pub fn geometry(&self) -> Transport {
+        self.geometry
+    }
     pub fn queue_depth(&self) -> usize {
         self.depth
     }
@@ -273,7 +466,9 @@ impl PoolSession {
         }
     }
     pub fn pending(&self) -> [usize; 2] {
-        self.slots.map(|a| a.iter().filter(|x| x.is_some()).count())
+        self.slots
+            .each_ref()
+            .map(|a| a.iter().filter(|x| x.is_some()).count())
     }
     unsafe fn poll(
         &mut self,
@@ -306,11 +501,23 @@ impl PoolSession {
                     self.stop("stale_completion_ticket");
                     continue;
                 }
+                if completion.packet_count as usize != self.geometry.entries()
+                    || completion.reserved != 0
+                    || completion.result.packets[self.geometry.entries()..]
+                        .iter()
+                        .any(|p| p.status != 0 || p.requested != 0 || p.actual != 0 || p.ticks != 0)
+                {
+                    self.slots[d][slot] = None;
+                    self.completed[d] += 1;
+                    records.record(d, flight.seq).completion = Some(completion);
+                    self.stop("native_completion_geometry");
+                    continue;
+                }
                 if io.worker_timing() {
                     self.previous[d][slot] = Some(PreviousCompletion {
                         sequence: flight.seq as u64,
                         start: flight.start,
-                        last_packet: completion.result.packets[ENTRIES - 1].ticks,
+                        last_packet: completion.last_packet_ticks(),
                         callback: completion.result.callback_ticks,
                         consumed: consumed_ticks,
                         pump: completion.pump,
@@ -325,23 +532,44 @@ impl PoolSession {
                 record.completion = Some(completion);
                 let c = completion.result;
                 if c.matched != 1 || !ok(c.status) {
+                    // Preserve exactly the first validation failure before abort/drain.
+                    // Trace owns a completed native copy; no pending USB storage is read.
+                    if !draining && self.reason.is_none() {
+                        self.completion_failure = Some(CompletionFailure {
+                            direction: d,
+                            reason: 23,
+                            trace: record.clone(),
+                        });
+                    }
                     self.stop("request_completion_error");
                     continue;
                 }
-                if !c.packets.iter().enumerate().all(|(i, p)| {
-                    ok(p.status)
-                        && p.requested == record.lengths[i]
-                        && if d == 0 {
-                            valid_length(p.actual)
-                        } else {
-                            p.actual == p.requested
-                        }
-                }) {
+                if !c.packets[..self.geometry.entries()]
+                    .iter()
+                    .enumerate()
+                    .all(|(i, p)| {
+                        ok(p.status)
+                            && p.requested == record.lengths[i]
+                            && if d == 0 {
+                                valid_length(p.actual)
+                            } else {
+                                p.actual == p.requested
+                            }
+                    })
+                {
+                    // Preserve exactly the first validation failure before abort/drain.
+                    // Trace owns a completed native copy; no pending USB storage is read.
+                    if !draining && self.reason.is_none() {
+                        self.completion_failure = Some(CompletionFailure {
+                            direction: d,
+                            reason: 22,
+                            trace: record.clone(),
+                        });
+                    }
                     self.stop("packet_completion_error");
                     continue;
                 }
-                self.frames[d] += c
-                    .packets
+                self.frames[d] += c.packets[..self.geometry.entries()]
                     .iter()
                     .map(|p| u64::from(p.actual / 24))
                     .sum::<u64>();
@@ -351,12 +579,13 @@ impl PoolSession {
                         self.stop("completed_buffer_unavailable");
                         continue;
                     }
-                    record.crc_after = crc32(std::slice::from_raw_parts(ptr, BLOCK_BYTES));
+                    record.crc_after =
+                        crc32(std::slice::from_raw_parts(ptr, self.geometry.bytes()));
                     if record.crc_after != record.crc_before {
                         self.stop("output_payload_changed");
                     }
                 } else if self.reason.is_none() {
-                    let at = flight.seq % FEEDBACK_SLOTS;
+                    let at = flight.seq % self.geometry.history();
                     if self.feedback[at].is_some() {
                         self.stop("feedback_overrun");
                         continue;
@@ -366,9 +595,11 @@ impl PoolSession {
                         self.stop("capture_buffer_unavailable");
                         continue;
                     }
-                    if let Err(r) =
-                        io.capture(flight.seq, &c, std::slice::from_raw_parts(ptr, BLOCK_BYTES))
-                    {
+                    if let Err(r) = io.capture(
+                        flight.seq,
+                        &c,
+                        std::slice::from_raw_parts(ptr, self.geometry.bytes()),
+                    ) {
                         self.stop(r);
                         continue;
                     }
@@ -386,7 +617,7 @@ impl PoolSession {
             self.stop("native_callback_fault");
         }
         while self.reason.is_none() {
-            let Some(f) = self.feedback[self.clock_seq % FEEDBACK_SLOTS] else {
+            let Some(f) = self.feedback[self.clock_seq % self.geometry.history()] else {
                 break;
             };
             if f.seq != self.clock_seq {
@@ -397,7 +628,7 @@ impl PoolSession {
                 self.stop(r);
                 break;
             }
-            for group in f.completion.packets.chunks_exact(8) {
+            for group in f.completion.packets[..self.geometry.entries()].chunks_exact(8) {
                 let ticks = std::array::from_fn(|i| group[i].ticks);
                 if let Err(r) = self
                     .clock
@@ -411,6 +642,9 @@ impl PoolSession {
                     break;
                 }
                 self.clock_frames += group.iter().map(|p| u64::from(p.actual / 24)).sum::<u64>();
+            }
+            if self.reason.is_some() {
+                break;
             }
             self.clock_seq += 1;
         }
@@ -450,8 +684,16 @@ impl PoolSession {
         limit: Option<usize>,
         stopped: &impl Fn() -> bool,
     ) {
+        if !ops.compatible() {
+            self.stop("pool_abi_mismatch");
+            return;
+        }
         if records.records.iter().any(|r| r.is_empty())
-            || (records.recycle && records.records.iter().any(|r| r.len() < FEEDBACK_SLOTS))
+            || (records.recycle
+                && records
+                    .records
+                    .iter()
+                    .any(|r| r.len() < self.geometry.history()))
         {
             self.stop("invalid_journal");
             return;
@@ -479,7 +721,12 @@ impl PoolSession {
             }
             if limit.is_some_and(|count| {
                 began.elapsed()
-                    > Duration::from_millis(count as u64 * 8 + LEAD_MS + FEEDBACK_DELAY_MS + 1000)
+                    > Duration::from_millis(
+                        count as u64 * self.geometry.block_ms()
+                            + LEAD_MS
+                            + FEEDBACK_DELAY_MS
+                            + 1000,
+                    )
             }) {
                 self.stop("stream_deadline");
                 break;
@@ -490,7 +737,7 @@ impl PoolSession {
                 0
             };
             self.poll(ops, ctx, records, io, false);
-            let poll_end_ticks = if observe_worker {
+            let mut poll_end_ticks = if observe_worker {
                 (ops.now_ticks)(ctx)
             } else {
                 0
@@ -501,171 +748,311 @@ impl PoolSession {
             } else if last_progress.elapsed() > Duration::from_millis(250) {
                 self.stop("completion_deadline");
             }
-            for d in 0..2 {
-                while limit.is_none_or(|count| self.next[d] < count) && self.reason.is_none() {
-                    let seq = self.next[d];
-                    let slot = seq % self.depth;
-                    if self.slots[d][slot].is_some() {
+            let mut output_deferred = false;
+            let deadline = self.submission_order == SubmissionOrder::Deadline;
+            let mut attempts = 0;
+            let mut batch_attempts = 0;
+            let mut batch_begin = if deadline { (ops.now_ticks)(ctx) } else { 0 };
+            while self.reason.is_none() {
+                if deadline && attempts >= submission_order::CATCH_UP_ATTEMPTS {
+                    break;
+                }
+                if deadline
+                    && submission_order::recheck(
+                        batch_attempts,
+                        batch_begin,
+                        (ops.now_ticks)(ctx),
+                        self.info.timebase_numer,
+                        self.info.timebase_denom,
+                    )
+                {
+                    // Reconcile ownership and capture before choosing another
+                    // deadline. Production polling does not dispatch callbacks
+                    // or reset the per-pump hard bound. The test-only hypothesis
+                    // can dispatch ready sources here before polling.
+                    if stopped() {
+                        self.stop("signal");
                         break;
                     }
-                    let feedback = if d == 1 {
-                        let Some(f) = self.feedback[seq % FEEDBACK_SLOTS] else {
-                            break;
-                        };
-                        if f.seq != seq || self.clock_seq <= seq {
-                            break;
-                        }
-                        Some(f)
-                    } else {
-                        None
-                    };
-                    let Some(start) = start_frame(base, seq, d == 1) else {
-                        self.stop("schedule_overflow");
+                    #[cfg(test)]
+                    self.service_ready(ops, ctx, records, io, false, limit, stopped);
+                    self.poll(ops, ctx, records, io, false);
+                    if observe_worker {
+                        poll_end_ticks = (ops.now_ticks)(ctx);
+                    }
+                    if self.reason.is_some() {
                         break;
-                    };
-                    let mut event = WorkerEvent {
-                        direction: d as u64,
+                    }
+                    self.catch_up_rechecks = self.catch_up_rechecks.saturating_add(1);
+                    batch_attempts = 0;
+                    batch_begin = (ops.now_ticks)(ctx);
+                }
+                let mut starts = [None; 2];
+                for (d, start) in starts.iter_mut().enumerate() {
+                    if !(d == 1 && output_deferred) && self.eligible(d, limit) {
+                        *start = self.geometry.start_frame(base, self.next[d], d == 1);
+                        if start.is_none() {
+                            self.stop("schedule_overflow");
+                        }
+                    }
+                }
+                if self.reason.is_some() {
+                    break;
+                }
+                let Some(d) = self.submission_order.choose(starts) else {
+                    break;
+                };
+                let seq = self.next[d];
+                let slot = seq % self.depth;
+                let feedback = if d == 1 {
+                    self.feedback[seq % self.geometry.history()]
+                } else {
+                    None
+                };
+                let start = starts[d].unwrap();
+                attempts += 1;
+                batch_attempts += 1;
+                if deadline {
+                    self.max_catch_up_attempts = self.max_catch_up_attempts.max(attempts);
+                }
+                let mut event = WorkerEvent {
+                    direction: d as u64,
+                    sequence: seq as u64,
+                    slot: slot as u64,
+                    ticket: (seq as u64).saturating_add(1),
+                    start_frame: start,
+                    loop_enter_ticks,
+                    poll_end_ticks,
+                    ..WorkerEvent::default()
+                };
+                if observe_worker {
+                    if let Some(p) = self.previous[d][slot] {
+                        event.flags |= wt::PREVIOUS;
+                        event.previous_sequence = p.sequence;
+                        event.previous_start_frame = p.start;
+                        event.previous_last_packet_ticks = p.last_packet;
+                        event.previous_callback_ticks = p.callback;
+                        event.previous_consumed_ticks = p.consumed;
+                    }
+                    if let Some(f) = feedback {
+                        event.flags |= wt::FEEDBACK;
+                        event.feedback_sequence = f.seq as u64;
+                        event.feedback_last_packet_ticks =
+                            f.completion.packets[self.geometry.entries() - 1].ticks;
+                        event.feedback_callback_ticks = f.completion.callback_ticks;
+                        event.feedback_consumed_ticks = f.consumed_ticks;
+                    }
+                    if let Some((begin, end)) = pump_times {
+                        event.flags |= wt::PUMP;
+                        event.pump_enter_ticks = begin;
+                        event.pump_exit_ticks = end;
+                    }
+                    event.check_begin_ticks = (ops.now_ticks)(ctx);
+                }
+                let mut now = Clock::default();
+                let clock_result = (ops.base.clock)(ctx, &mut now);
+                if observe_worker {
+                    event.check_end_ticks = (ops.now_ticks)(ctx);
+                    event.check_status = clock_result as i64 as u64;
+                    if clock_result == 0 {
+                        event.flags |= wt::CHECKED;
+                        event.checked_frame = now.frame;
+                    }
+                }
+                if clock_result != 0 || !schedule_valid(now.frame, start) {
+                    if observe_worker {
+                        io.worker_event(
+                            event,
+                            self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
+                            feedback.map_or(Pump::default(), |f| f.pump),
+                        );
+                    }
+                    self.submission_failure = Some(SubmissionFailure {
+                        status: clock_result,
+                        direction: d as u32,
                         sequence: seq as u64,
-                        slot: slot as u64,
-                        ticket: (seq as u64).saturating_add(1),
-                        start_frame: start,
-                        loop_enter_ticks,
-                        poll_end_ticks,
-                        ..WorkerEvent::default()
-                    };
-                    if observe_worker {
-                        if let Some(p) = self.previous[d][slot] {
-                            event.flags |= wt::PREVIOUS;
-                            event.previous_sequence = p.sequence;
-                            event.previous_start_frame = p.start;
-                            event.previous_last_packet_ticks = p.last_packet;
-                            event.previous_callback_ticks = p.callback;
-                            event.previous_consumed_ticks = p.consumed;
-                        }
-                        if let Some(f) = feedback {
-                            event.flags |= wt::FEEDBACK;
-                            event.feedback_sequence = f.seq as u64;
-                            event.feedback_last_packet_ticks =
-                                f.completion.packets[ENTRIES - 1].ticks;
-                            event.feedback_callback_ticks = f.completion.callback_ticks;
-                            event.feedback_consumed_ticks = f.consumed_ticks;
-                        }
-                        if let Some((begin, end)) = pump_times {
-                            event.flags |= wt::PUMP;
-                            event.pump_enter_ticks = begin;
-                            event.pump_exit_ticks = end;
-                        }
-                        event.check_begin_ticks = (ops.now_ticks)(ctx);
-                    }
-                    let mut now = Clock::default();
-                    let clock_result = (ops.base.clock)(ctx, &mut now);
-                    if observe_worker {
-                        event.check_end_ticks = (ops.now_ticks)(ctx);
-                        event.check_status = clock_result as i64 as u64;
-                        if clock_result == 0 {
-                            event.flags |= wt::CHECKED;
-                            event.checked_frame = now.frame;
-                        }
-                    }
-                    if clock_result != 0 || !schedule_valid(now.frame, start) {
-                        if observe_worker {
-                            io.worker_event(
-                                event,
-                                self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
-                                feedback.map_or(Pump::default(), |f| f.pump),
-                            );
-                        }
+                        start,
+                        checked: now.frame,
+                        returned: now.frame,
+                    });
+                    self.stop(if clock_result != 0 {
+                        "clock_query_failed"
+                    } else {
+                        "stale_schedule"
+                    });
+                    break;
+                }
+                if stopped() {
+                    self.stop("signal");
+                    break;
+                }
+                if d == 1 && self.output_policy == OutputPolicy::WhenReady {
+                    // Include the retry that fails the lead gate. This is measured
+                    // from the previous deferral decision, not callback delivery.
+                    self.retry.begin(self.clock_frames, (ops.now_ticks)(ctx));
+                    let lead = start.saturating_sub(now.frame);
+                    if lead < MIN_LEAD_MS {
                         self.submission_failure = Some(SubmissionFailure {
-                            status: clock_result,
-                            direction: d as u32,
+                            status: 0,
+                            direction: 1,
                             sequence: seq as u64,
                             start,
                             checked: now.frame,
                             returned: now.frame,
                         });
-                        self.stop(if clock_result != 0 {
-                            "clock_query_failed"
-                        } else {
-                            "stale_schedule"
-                        });
+                        io.output_retry(&self.retry.snapshot);
+                        self.stop("output_lead_deadline");
                         break;
                     }
-                    if stopped() {
-                        self.stop("signal");
-                        break;
-                    }
-                    let record = records.record(d, seq);
-                    *record = Trace::default();
-                    record.slot = slot;
-                    record.submitted_at = now.frame;
-                    record.lengths = if let Some(f) = feedback {
-                        f.completion.packets.map(|p| p.actual)
-                    } else {
-                        [312; ENTRIES]
-                    };
-                    record.first_sample = if d == 1 { self.next_sample } else { 0 };
-                    if d == 1 {
-                        let ptr = (ops.base.buffer)(ctx, 1, slot as u32);
-                        if ptr.is_null() {
-                            self.stop("output_buffer_unavailable");
-                            break;
-                        }
-                        let bytes = std::slice::from_raw_parts_mut(ptr, BLOCK_BYTES);
-                        bytes.fill(0);
-                        let frames = record
-                            .lengths
-                            .iter()
-                            .map(|&n| usize::from(n / 24))
-                            .sum::<usize>();
-                        if let Err(r) = io.output(self.next_sample, frames, bytes) {
+                    let frames = feedback.unwrap().completion.packets[..self.geometry.entries()]
+                        .iter()
+                        .map(|p| usize::from(p.actual / 24))
+                        .sum();
+                    let ready = match io.stage_output(self.next_sample, frames) {
+                        Ok(ready) => ready,
+                        Err(r) => {
+                            io.output_retry(&self.retry.snapshot);
                             self.stop(r);
                             break;
                         }
-                        for frame in 0..frames {
-                            for ch in 0..8 {
-                                let at = frame * 24 + ch * 3;
-                                let v =
-                                    ftu_protocol::decode_s24(bytes[at..at + 3].try_into().unwrap())
-                                        .unsigned_abs();
-                                record.peaks[ch] = record.peaks[ch].max(v);
-                                record.nonzero[ch] += u32::from(v != 0);
-                            }
-                        }
-                        record.crc_before = crc32(bytes);
-                        self.next_sample += frames as u64;
-                    }
-                    if observe_worker {
-                        event.flags |= wt::PREPARED;
-                        event.prepare_end_ticks = (ops.now_ticks)(ctx);
-                    }
-                    // Tickets identify sequence within this epoch; native callback tokens
-                    // additionally remain unique across context lifetimes on
-                    // their owning callback/run-loop thread.
-                    let Some(ticket) = (seq as u64).checked_add(1) else {
-                        self.stop("sequence_overflow");
-                        break;
                     };
-                    let flight = Flight { seq, ticket, start };
-                    record.flight = Some(flight);
-                    record.admission_ticks = (ops.now_ticks)(ctx);
-                    if observe_worker {
-                        event.flags |= wt::SUBMITTED;
-                        event.submit_begin_ticks = record.admission_ticks;
+                    let deferred = self.output_policy.defer(ready, lead);
+                    self.retry
+                        .decision(self.clock_frames, ready, deferred, (ops.now_ticks)(ctx));
+                    io.output_retry(&self.retry.snapshot);
+                    if deferred {
+                        self.output_deferrals = self.output_deferrals.saturating_add(1);
+                        output_deferred = true;
+                        // No ownership or cursor is consumed. Do not spend
+                        // the OUT retry allowance on further catch-up IN work.
+                        break;
                     }
-                    let r = (ops.submit)(
-                        ctx,
-                        d as u32,
-                        slot as u32,
-                        ticket,
+                    if !ready {
+                        self.output_deadline_fallbacks =
+                            self.output_deadline_fallbacks.saturating_add(1);
+                        // Preserve existing silence/missing-frame accounting.
+                        // No HAL writer (e.g. capture-only) must not wait forever.
+                    }
+                }
+                let record = records.record(d, seq);
+                *record = Trace::default();
+                record.slot = slot;
+                record.submitted_at = now.frame;
+                record.lengths = if let Some(f) = feedback {
+                    std::array::from_fn(|i| {
+                        if i < self.geometry.entries() {
+                            f.completion.packets[i].actual
+                        } else {
+                            0
+                        }
+                    })
+                } else {
+                    std::array::from_fn(|i| if i < self.geometry.entries() { 312 } else { 0 })
+                };
+                record.first_sample = if d == 1 { self.next_sample } else { 0 };
+                if d == 1 {
+                    let ptr = (ops.base.buffer)(ctx, 1, slot as u32);
+                    if ptr.is_null() {
+                        self.stop("output_buffer_unavailable");
+                        break;
+                    }
+                    let bytes = std::slice::from_raw_parts_mut(ptr, self.geometry.bytes());
+                    bytes.fill(0);
+                    let frames = record
+                        .lengths
+                        .iter()
+                        .map(|&n| usize::from(n / 24))
+                        .sum::<usize>();
+                    if let Err(r) = io.output(self.next_sample, frames, bytes) {
+                        self.stop(r);
+                        break;
+                    }
+                    for frame in 0..frames {
+                        for ch in 0..8 {
+                            let at = frame * 24 + ch * 3;
+                            let v = ftu_protocol::decode_s24(bytes[at..at + 3].try_into().unwrap())
+                                .unsigned_abs();
+                            record.peaks[ch] = record.peaks[ch].max(v);
+                            record.nonzero[ch] += u32::from(v != 0);
+                        }
+                    }
+                    record.crc_before = crc32(bytes);
+                    self.next_sample += frames as u64;
+                }
+                if observe_worker {
+                    event.flags |= wt::PREPARED;
+                    event.prepare_end_ticks = (ops.now_ticks)(ctx);
+                }
+                // Tickets identify sequence within this epoch; native callback tokens
+                // additionally remain unique across context lifetimes on
+                // their owning callback/run-loop thread.
+                let Some(ticket) = (seq as u64).checked_add(1) else {
+                    self.stop("sequence_overflow");
+                    break;
+                };
+                let flight = Flight { seq, ticket, start };
+                record.flight = Some(flight);
+                record.admission_ticks = (ops.now_ticks)(ctx);
+                if observe_worker {
+                    event.flags |= wt::SUBMITTED;
+                    event.submit_begin_ticks = record.admission_ticks;
+                }
+                let r = (ops.submit)(
+                    ctx,
+                    d as u32,
+                    slot as u32,
+                    ticket,
+                    start,
+                    record.lengths.as_ptr(),
+                );
+                if observe_worker {
+                    event.submit_end_ticks = (ops.now_ticks)(ctx);
+                    event.submit_status = r as i64 as u64;
+                }
+                record.submit = Some(r);
+                if r != 0 {
+                    let mut returned = Clock::default();
+                    let query = (ops.base.clock)(ctx, &mut returned);
+                    if query == 0 {
+                        record.submit_return_frame = returned.frame;
+                    }
+                    if observe_worker {
+                        event.flags |= wt::QUERIED;
+                        event.query_end_ticks = (ops.now_ticks)(ctx);
+                        event.return_clock_status = query as i64 as u64;
+                        if query == 0 {
+                            event.flags |= wt::RETURNED;
+                            event.returned_frame = returned.frame;
+                        }
+                        io.worker_event(
+                            event,
+                            self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
+                            feedback.map_or(Pump::default(), |f| f.pump),
+                        );
+                    }
+                    self.submission_failure = Some(SubmissionFailure {
+                        status: r,
+                        direction: d as u32,
+                        sequence: seq as u64,
                         start,
-                        record.lengths.as_ptr(),
-                    );
-                    if observe_worker {
-                        event.submit_end_ticks = (ops.now_ticks)(ctx);
-                        event.submit_status = r as i64 as u64;
-                    }
-                    record.submit = Some(r);
-                    if r != 0 {
+                        checked: now.frame,
+                        returned: record.submit_return_frame,
+                    });
+                    self.stop("submit_failed");
+                    break;
+                }
+                self.slots[d][slot] = Some(flight);
+                self.next[d] += 1;
+                if seq >= self.depth {
+                    self.reused[d] += 1;
+                }
+                self.max_pending[d] = self.max_pending[d].max(self.pending()[d]);
+                if d == 1 {
+                    self.feedback[seq % self.geometry.history()] = None;
+                    if io.submission_timing()
+                        || observe_worker
+                        || self.output_policy == OutputPolicy::WhenReady
+                    {
                         let mut returned = Clock::default();
                         let query = (ops.base.clock)(ctx, &mut returned);
                         if query == 0 {
@@ -679,62 +1066,37 @@ impl PoolSession {
                                 event.flags |= wt::RETURNED;
                                 event.returned_frame = returned.frame;
                             }
-                            io.worker_event(
-                                event,
-                                self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
-                                feedback.map_or(Pump::default(), |f| f.pump),
-                            );
                         }
-                        self.submission_failure = Some(SubmissionFailure {
-                            status: r,
-                            direction: d as u32,
-                            sequence: seq as u64,
-                            start,
-                            checked: now.frame,
-                            returned: record.submit_return_frame,
-                        });
-                        self.stop("submit_failed");
-                        break;
-                    }
-                    self.slots[d][slot] = Some(flight);
-                    self.next[d] += 1;
-                    if seq >= self.depth {
-                        self.reused[d] += 1;
-                    }
-                    self.max_pending[d] = self.max_pending[d].max(self.pending()[d]);
-                    if d == 1 {
-                        self.feedback[seq % FEEDBACK_SLOTS] = None;
-                        if io.submission_timing() || observe_worker {
-                            let mut returned = Clock::default();
-                            let query = (ops.base.clock)(ctx, &mut returned);
-                            if query == 0 {
-                                record.submit_return_frame = returned.frame;
-                            }
-                            if observe_worker {
-                                event.flags |= wt::QUERIED;
-                                event.query_end_ticks = (ops.now_ticks)(ctx);
-                                event.return_clock_status = query as i64 as u64;
-                                if query == 0 {
-                                    event.flags |= wt::RETURNED;
-                                    event.returned_frame = returned.frame;
-                                }
-                            }
-                            if io.submission_timing() {
-                                io.submitted(
-                                    start,
-                                    now.frame,
-                                    (query == 0).then_some(returned.frame),
-                                );
-                            }
+                        if self.output_policy == OutputPolicy::WhenReady
+                            && (query != 0 || start.saturating_sub(returned.frame) < MIN_LEAD_MS)
+                        {
+                            // Ownership was transferred: keep the slot pending
+                            // and drain its matching callback even on rejection.
+                            self.submission_failure = Some(SubmissionFailure {
+                                status: query,
+                                direction: 1,
+                                sequence: seq as u64,
+                                start,
+                                checked: now.frame,
+                                returned: returned.frame,
+                            });
+                            self.stop(if query != 0 {
+                                "clock_query_failed"
+                            } else {
+                                "output_lead_deadline"
+                            });
+                        }
+                        if io.submission_timing() {
+                            io.submitted(start, now.frame, (query == 0).then_some(returned.frame));
                         }
                     }
-                    if observe_worker {
-                        io.worker_event(
-                            event,
-                            self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
-                            feedback.map_or(Pump::default(), |f| f.pump),
-                        );
-                    }
+                }
+                if observe_worker {
+                    io.worker_event(
+                        event,
+                        self.previous[d][slot].map_or(Pump::default(), |p| p.pump),
+                        feedback.map_or(Pump::default(), |f| f.pump),
+                    );
                 }
             }
             if observe_worker
@@ -747,15 +1109,29 @@ impl PoolSession {
             {
                 sample_worker(ops, ctx, io, &mut sampled_at);
             }
-            if self.pending().iter().any(|&n| n > 0) {
+            if self.pending().iter().any(|&n| n > 0) || output_deferred {
                 let begin = if observe_worker {
                     (ops.now_ticks)(ctx)
                 } else {
                     0
                 };
+                #[cfg(test)]
+                if self.ready_dispatch.is_some() {
+                    // Catch-up yields to ready callbacks, not to idle waiting
+                    // while an eligible submission is still queued. Ten attempts
+                    // have already made progress; an empty probe cannot spin.
+                    let work_left = attempts >= submission_order::CATCH_UP_ATTEMPTS
+                        && (self.eligible(0, limit)
+                            || (!output_deferred && self.eligible(1, limit)));
+                    self.service_ready(ops, ctx, records, io, !work_left, limit, stopped);
+                } else {
+                    (ops.base.pump)(ctx);
+                }
+                #[cfg(not(test))]
                 (ops.base.pump)(ctx);
                 if observe_worker {
                     pump_times = Some((begin, (ops.now_ticks)(ctx)));
+                    observe_pump(ops, ctx, io, false);
                 }
             } else if limit.is_none_or(|count| self.completed[1] < count) && self.reason.is_none() {
                 self.stop("pipeline_stalled");
@@ -790,6 +1166,7 @@ impl PoolSession {
         while self.pending().iter().any(|&n| n > 0) && began.elapsed() < Duration::from_millis(1000)
         {
             (ops.base.pump)(ctx);
+            observe_pump(ops, ctx, io, true);
             self.poll(ops, ctx, records, io, true);
         }
         self.drain_failed = self.pending().iter().any(|&n| n > 0);
@@ -799,6 +1176,15 @@ impl PoolSession {
     }
 }
 // Read-only telemetry failures never enter the transport state machine.
+unsafe fn observe_pump(ops: &PoolOps, ctx: *mut c_void, io: &mut impl StreamIo, draining: bool) {
+    if io.worker_timing() {
+        let mut value = PumpObservation::default();
+        if let Some(f) = ops.last_pump {
+            f(ctx, &mut value);
+        }
+        io.worker_pump(value, draining);
+    }
+}
 fn sample_due(last: u64, now: u64, numer: u32, denom: u32) -> bool {
     numer != 0
         && denom != 0
@@ -837,6 +1223,26 @@ mod tests {
     }
     #[test]
     fn callback_layout() {
-        assert_eq!(std::mem::size_of::<PoolCompletion>(), 1096);
+        assert_eq!(std::mem::size_of::<PoolCompletion>(), 1104);
+    }
+}
+
+#[cfg(test)]
+mod geometry_boundary_tests {
+    use super::*;
+    #[test]
+    fn last_packet_uses_active_count_and_rejects_invalid_count() {
+        let mut c = PoolCompletion::default();
+        for (i, p) in c.result.packets.iter_mut().enumerate() {
+            p.ticks = 100 + i as u64;
+        }
+        for n in [8, 16, 32, 64] {
+            c.packet_count = n;
+            assert_eq!(c.last_packet_ticks(), 99 + u64::from(n));
+        }
+        for n in [0, 65, u32::MAX] {
+            c.packet_count = n;
+            assert_eq!(c.last_packet_ticks(), 0);
+        }
     }
 }

@@ -2,14 +2,24 @@
 //! No HAL publication and no mixer/rate writes. Use only from a standalone probe.
 mod clock;
 mod continuous;
+mod first_failure;
 mod geometry;
 mod live;
 mod native;
+mod output_admission;
+mod output_retry;
 mod pool;
+mod recovery;
+mod runtime_fault;
 mod scheduler;
+mod shutdown;
+mod startup;
+mod submission_order;
 pub mod timeline;
 mod timing;
+pub mod transport;
 mod worker_delivery;
+mod worker_pumps;
 mod worker_timing;
 use native::*;
 use scheduler::*;
@@ -517,3 +527,11 @@ mod simulation;
 
 #[cfg(test)]
 mod pool_simulation;
+
+#[cfg(test)]
+mod capture_trace;
+#[cfg(test)]
+mod fixed_replay;
+
+#[cfg(any(test, feature = "independent-4ms"))]
+mod independent_completion;

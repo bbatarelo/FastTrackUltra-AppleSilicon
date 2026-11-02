@@ -28,6 +28,15 @@
 #define FTU_TIMING_PROPERTY 'ftuT'
 #define FTU_WORKER_PROPERTY 'ftuW'
 #define FTU_DELIVERY_PROPERTY 'ftuD'
+#define FTU_PUMPS_PROPERTY 'ftuP'
+#define FTU_FAILURE_PROPERTY 'ftuF'
+#define FTU_STARTUP_PROPERTY 'ftuI'
+#define FTU_RETRY_PROPERTY 'ftuR'
+#define FTU_HOTPLUG_PROPERTY 'ftuH'
+#define FTU_RUNTIME_PROPERTY 'ftuE'
+#define FTU_RECOVERY_PROPERTY 'ftuA'
+#define FTU_SHUTDOWN_PROPERTY 'ftuQ'
+#define FTU_CUSTOM_PROPERTIES 13
 
 enum { kObjPlugIn = kAudioObjectPlugInObject, kObjDevice = 2, kObjInput = 3, kObjOutput = 4 };
 
@@ -40,13 +49,32 @@ static atomic_bool g_initialized;
 static AudioServerPlugInHostRef g_host;
 static struct ftu_live_config g_cfg; /* immutable after Initialize */
 
-/* Selected unit. Written once by adopt() before g_live is published with release
- * ordering; the handle is never destroyed for the lifetime of the host process. */
+/* Selected model. Written once by adopt() before g_live is published with release
+ * ordering; the handle and these strings are never destroyed or replaced for the
+ * lifetime of the host process. Reconnect only moves the Rust USB binding. */
 static _Atomic(struct ftu_live *) g_live;
-static uint32_t g_product, g_location;
+static uint32_t g_product;
 static CFStringRef g_name, g_uid, g_model;
 static atomic_bool g_present, g_alive, g_running;
 static _Atomic(UInt32) g_buffer_frames;
+
+/* Monitor-thread-only binding (Initialize runs before the monitor exists). */
+static bool g_bound;
+static struct ftu_usb_unit g_unit;
+
+/* ftuH hotplug diagnostics: single writer (monitor), seqlock for coherent reads. */
+enum { FTU_REJECT_NONE, FTU_REJECT_AMBIGUOUS, FTU_REJECT_PRODUCT, FTU_REJECT_QUARANTINE, FTU_REJECT_REBIND };
+static _Atomic(uint32_t) g_hp_seq, g_hp_bound, g_hp_location, g_hp_reject;
+static _Atomic(uint64_t) g_hp_registry, g_hp_rebinds, g_hp_removals;
+static _Atomic(int32_t) g_hp_detach_status, g_hp_rebind_status;
+/* Monitor-driven recovery calls (ftuA "monitor_*"); written by the monitor only. */
+static _Atomic(uint64_t) g_recover_calls;
+static _Atomic(int32_t) g_recover_status;
+/* Monitor-thread only. Delay only the stop notification while a clean-fault
+ * decision is briefly blocked by worker completion / control-lock contention.
+ * Property reads and realtime calls always report the actual phase. */
+static unsigned g_recover_wait_polls;
+#define FTU_RECOVERY_WAIT_POLLS 2u
 
 /* ---------------------------------------------------------------- discovery */
 
@@ -64,14 +92,17 @@ static struct ftu_live *live_handle(void)
     return atomic_load_explicit(&g_live, memory_order_acquire);
 }
 
-static struct ftu_live *adopt(uint32_t product, uint32_t location)
+/* The UID is port-independent so a moved unit keeps app selections. Without a
+ * serial number it names "the one connected unit of this model", not a physical
+ * unit; discovery refuses more than one connected unit. */
+static struct ftu_live *adopt(uint32_t product, uint32_t location, uint64_t registry)
 {
     CFStringRef name = CFStringCreateWithCString(NULL, model_name(product), kCFStringEncodingUTF8);
-    CFStringRef uid = CFStringCreateWithFormat(NULL, NULL, CFSTR(FTU_BUNDLE_ID ":%04X:%08X"), product, location);
+    CFStringRef uid = CFStringCreateWithFormat(NULL, NULL, CFSTR(FTU_BUNDLE_ID ":%04X:single"), product);
     CFStringRef model = CFStringCreateWithFormat(NULL, NULL, CFSTR(FTU_BUNDLE_ID ":%04X"), product);
     struct ftu_live *live = NULL;
     if (name && uid && model)
-        live = ftu_live_create(&ftu_usb_factory, product, location);
+        live = ftu_live_create_pinned(&ftu_usb_factory, product, location, registry);
     if (!live) {
         if (name) CFRelease(name);
         if (uid) CFRelease(uid);
@@ -82,9 +113,17 @@ static struct ftu_live *adopt(uint32_t product, uint32_t location)
     g_uid = uid;
     g_model = model;
     g_product = product;
-    g_location = location;
     atomic_store_explicit(&g_live, live, memory_order_release);
     return live;
+}
+
+static void publish_binding(void)
+{
+    atomic_fetch_add(&g_hp_seq, 1);
+    atomic_store(&g_hp_bound, g_bound);
+    atomic_store(&g_hp_location, g_bound ? g_unit.location : 0);
+    atomic_store(&g_hp_registry, g_bound ? g_unit.registry_id : 0);
+    atomic_fetch_add(&g_hp_seq, 1);
 }
 
 static uint32_t session_phase(struct ftu_live *live)
@@ -102,37 +141,119 @@ static void notify(AudioObjectID obj, const AudioObjectPropertyAddress *addrs, U
 }
 
 /* Called from Initialize (notify=false) and then only from the monitor thread, so
- * handle creation is single-threaded. No lock is held across USB or Rust calls. */
+ * handle creation and binding are single-threaded. The plug-in holds no lock;
+ * Rust serializes detach/rebind with Start/Stop and returns before notification.
+ *
+ * Bound: the same product, location AND registry generation must remain the only
+ * supported unit. Anything else (absence, port/hub move, fast replug at the same
+ * port, a second unit) detaches and publishes removal in this poll. Unbound: one
+ * unit of the adopted model is rebound and published on a later poll, so hosts see
+ * removal then arrival. A different model or quarantine is refused, never forced.
+ * Registry entry IDs reveal re-enumeration missed between polls; they cannot
+ * distinguish two physical units of one model (no serial number). */
 static void poll_presence(bool notify_host)
 {
-    uint32_t product = 0, location = 0;
-    bool found = ftu_usb_find(&product, &location) == 0 && model_name(product) != NULL;
+    struct ftu_usb_unit unit;
+    int32_t found = ftu_usb_discover(&unit);
+    if (found == FTU_USB_ONE && !model_name(unit.product))
+        found = FTU_USB_UNKNOWN;
     struct ftu_live *live = live_handle();
-    if (!live && found)
-        live = adopt(product, location);
-    bool present = live && found && product == g_product && location == g_location;
-    uint32_t phase = present ? session_phase(live) : 0;
-    bool alive = present && phase != 5;
-    bool running_changed = atomic_exchange(&g_running, phase == 2) != (phase == 2);
+    bool was_alive = atomic_load(&g_alive); /* only this thread writes g_alive */
+    bool known = found != FTU_USB_UNKNOWN; /* transient: keep state, retry next poll */
+    bool binding_changed = false;
+    if (known && !live) {
+        if (found == FTU_USB_ONE && (live = adopt(unit.product, unit.location, unit.registry_id))) {
+            g_bound = true;
+            g_unit = unit;
+            binding_changed = true;
+        }
+    } else if (known && g_bound) {
+        if (!(found == FTU_USB_ONE && unit.product == g_product && unit.location == g_unit.location &&
+              unit.registry_id == g_unit.registry_id)) {
+            /* Close CoreAudio admission first; Rust then refuses starts and drains. */
+            atomic_store(&g_alive, false);
+            g_bound = false;
+            binding_changed = true;
+            atomic_fetch_add(&g_hp_removals, 1);
+            atomic_store(&g_hp_detach_status, ftu_live_detach(live));
+        }
+    } else if (known) {
+        uint32_t reject = FTU_REJECT_NONE;
+        if (found == FTU_USB_AMBIGUOUS)
+            reject = FTU_REJECT_AMBIGUOUS;
+        else if (found == FTU_USB_ONE && unit.product != g_product)
+            reject = FTU_REJECT_PRODUCT;
+        else if (found == FTU_USB_ONE && session_phase(live) == 5)
+            reject = FTU_REJECT_QUARANTINE;
+        else if (found == FTU_USB_ONE) {
+            int32_t rc = ftu_live_rebind(live, unit.product, unit.location, unit.registry_id);
+            atomic_store(&g_hp_rebind_status, rc);
+            if (rc == 0) {
+                g_bound = true;
+                g_unit = unit;
+                binding_changed = true;
+                atomic_fetch_add(&g_hp_rebinds, 1);
+            } else
+                reject = FTU_REJECT_REBIND;
+        }
+        atomic_store(&g_hp_reject, reject);
+    }
+    if (binding_changed)
+        publish_binding();
+    /* The bound unit was confirmed unchanged (product, location, registry) by
+     * this poll; only then may a retained session be recovered. */
+    bool steady = known && live && g_bound && !binding_changed;
+    uint32_t phase = live ? session_phase(live) : 0;
+    /* First try a clean immediate recovery before publishing a transient stop.
+     * A successful reopen keeps the admitted clients and changes the ZTS seed;
+     * telling the host to observe a stopped engine first could solicit StopIO
+     * and cancel that same recovery. Backoff/refusal still publishes stopped.
+     * RUNNING polls advance the healthy-duration budget and its diagnostics. */
+    bool defer_stop_note = false;
+    if (notify_host && live && (phase == 5 || (steady && (phase == 4 || phase == 2)))) {
+        int32_t rc = ftu_live_recover(live, ftu_live_binding(live));
+        atomic_fetch_add(&g_recover_calls, 1);
+        atomic_store(&g_recover_status, rc);
+        phase = session_phase(live);
+        if (phase == 4 && (rc == 3 || rc == 4) && atomic_load(&g_running) &&
+            g_recover_wait_polls < FTU_RECOVERY_WAIT_POLLS) {
+            ++g_recover_wait_polls;
+            defer_stop_note = true;
+        }
+    }
+    if (!defer_stop_note)
+        g_recover_wait_polls = 0;
+    /* A quarantined handle stays visible but dead while one unit of its model is
+     * connected, as before; it is never rebound automatically. */
+    bool present = atomic_load(&g_present);
+    if (known)
+        present = live && (g_bound || (phase == 5 && found == FTU_USB_ONE && unit.product == g_product));
+    bool alive = present && phase != 5, running = present && phase == 2;
+    bool running_changed = !defer_stop_note && atomic_exchange(&g_running, running) != running;
     bool list_changed = atomic_exchange(&g_present, present) != present;
-    bool alive_changed = atomic_exchange(&g_alive, alive) != alive;
+    atomic_store(&g_alive, alive);
+    bool alive_changed = was_alive != alive;
     if (!notify_host)
         return;
-    if (running_changed) {
-        const AudioObjectPropertyAddress a = {kAudioDevicePropertyDeviceIsRunning,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};
-        notify(kObjDevice,&a,1);
-    }
-    if (alive_changed) {
-        static const AudioObjectPropertyAddress a = {
-            kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain };
-        notify(kObjDevice, &a, 1);
-    }
+    /* Announce arrival first, then explicitly publish availability even if the
+     * local dead/idle values did not change while this object was absent. */
     if (list_changed) {
         static const AudioObjectPropertyAddress a[2] = {
             { kAudioPlugInPropertyDeviceList, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain },
             { kAudioObjectPropertyOwnedObjects, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain } };
         notify(kObjPlugIn, a, 2);
     }
+    if (running_changed || (list_changed && present)) {
+        const AudioObjectPropertyAddress a = {kAudioDevicePropertyDeviceIsRunning,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};
+        notify(kObjDevice,&a,1);
+    }
+    if (alive_changed || (list_changed && present)) {
+        static const AudioObjectPropertyAddress a = {
+            kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain };
+        notify(kObjDevice, &a, 1);
+    }
+
+
 }
 
 static void *monitor_main(void *arg)
@@ -159,7 +280,7 @@ typedef union {
     AudioBufferList abl;
     struct { AudioChannelLayoutTag mChannelLayoutTag; AudioChannelBitmap mChannelBitmap; UInt32 mNumberChannelDescriptions; AudioChannelDescription mChannelDescriptions[FTU_MAX_CHANNELS]; } layout;
     uint8_t raw[256];
-    AudioServerPlugInCustomPropertyInfo custom[5];
+    AudioServerPlugInCustomPropertyInfo custom[FTU_CUSTOM_PROPERTIES];
 } prop_buf;
 
 /* elem != 0 marks arrays that may be truncated to the caller's buffer. */
@@ -264,6 +385,14 @@ static OSStatus device_prop(const AudioObjectPropertyAddress *a, UInt32 qsize, c
     bool io = in || out;
     switch (a->mSelector) {
     case FTU_BUILD_PROPERTY: return put_str(b, s, CFSTR(FTU_BUILD_ID));
+    case FTU_RUNTIME_PROPERTY:
+    case FTU_RECOVERY_PROPERTY:
+    case FTU_SHUTDOWN_PROPERTY:
+    case FTU_HOTPLUG_PROPERTY:
+    case FTU_RETRY_PROPERTY:
+    case FTU_STARTUP_PROPERTY:
+    case FTU_FAILURE_PROPERTY:
+    case FTU_PUMPS_PROPERTY:
     case FTU_DELIVERY_PROPERTY:
     case FTU_WORKER_PROPERTY:
     case FTU_TIMING_PROPERTY:
@@ -274,6 +403,14 @@ static OSStatus device_prop(const AudioObjectPropertyAddress *a, UInt32 qsize, c
         b->custom[2]=(AudioServerPlugInCustomPropertyInfo){FTU_TIMING_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         b->custom[3]=(AudioServerPlugInCustomPropertyInfo){FTU_WORKER_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         b->custom[4]=(AudioServerPlugInCustomPropertyInfo){FTU_DELIVERY_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[5]=(AudioServerPlugInCustomPropertyInfo){FTU_PUMPS_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[6]=(AudioServerPlugInCustomPropertyInfo){FTU_FAILURE_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[7]=(AudioServerPlugInCustomPropertyInfo){FTU_STARTUP_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[8]=(AudioServerPlugInCustomPropertyInfo){FTU_RETRY_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[9]=(AudioServerPlugInCustomPropertyInfo){FTU_HOTPLUG_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[10]=(AudioServerPlugInCustomPropertyInfo){FTU_RUNTIME_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[11]=(AudioServerPlugInCustomPropertyInfo){FTU_RECOVERY_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
+        b->custom[12]=(AudioServerPlugInCustomPropertyInfo){FTU_SHUTDOWN_PROPERTY,kAudioServerPlugInCustomPropertyDataTypeCFString,kAudioServerPlugInCustomPropertyDataTypeNone};
         s->size=sizeof b->custom;s->elem=sizeof b->custom[0];return 0;
     case kAudioObjectPropertyBaseClass: return put_u32(b, s, kAudioObjectClassID);
     case kAudioObjectPropertyClass: return put_u32(b, s, kAudioDeviceClassID);
@@ -499,7 +636,9 @@ static OSStatus ftu_add_client(AudioServerPlugInDriverRef drv, AudioObjectID dev
     return client ? kAudioHardwareNoError : kAudioHardwareIllegalOperationError;
 }
 
-/* Rust tracks IO clients; stopping an unknown client is expected to return 0. */
+/* Rust tracks IO clients; stopping an unknown client is expected to return 0.
+ * For a client retired by a unit removal, this only acknowledges the retirement
+ * (under the session lock) and never touches the current session. */
 static OSStatus ftu_remove_client(AudioServerPlugInDriverRef drv, AudioObjectID dev,
                                   const AudioServerPlugInClientInfo *client)
 {
@@ -627,6 +766,8 @@ static CFStringRef worker_snapshot_text(const struct ftu_worker_snapshot *t)
         (unsigned long long)t->timebase_numer,(unsigned long long)t->timebase_denom,(unsigned long long)t->queue_depth,
         (unsigned long long)t->threshold_ms,(unsigned long long)t->observed,(unsigned long long)t->dropped,
         (unsigned long long)t->recent_overwritten,(unsigned long long)t->late_seen,(unsigned long long)t->late_retained,(unsigned long long)t->late_overflow);
+    CFStringAppendFormat(text,NULL,CFSTR(",\"block_ms\":%llu,\"entries\":%llu,\"feedback_slots\":%llu,\"replay_ms\":%llu"),
+        (unsigned long long)t->block_ms,(unsigned long long)t->entries,(unsigned long long)t->feedback_slots,(unsigned long long)t->replay_ms);
     const struct ftu_worker_event *banks[]={t->worst,t->recent,t->late};
     const unsigned counts[]={2,FTU_WORKER_RECENT,FTU_WORKER_LATE};
     const char *labels[]={"worst","recent","late"};
@@ -668,7 +809,7 @@ static void delivery_pump(CFMutableStringRef text,const uint64_t *p)
 }
 static CFStringRef delivery_snapshot_text(const struct ftu_delivery_snapshot *s)
 {
-    static const char *header[FTU_DELIVERY_HEADER]={"version","valid","epoch","timebase_numer","timebase_denom","steady_after","completed_in","completed_out","steady_completed_in","steady_completed_out","admissions_in","admissions_out","steady_admissions_in","steady_admissions_out","dropped","unmatched_pump_in","unmatched_pump_out","sample_count","cpu_errors","policy_errors","policy_defaults","sampler_invalid","sampler_max_ns","overflow","drained_in","drained_out","basic_policy_changes","constraint_policy_changes"};
+    static const char *header[FTU_DELIVERY_HEADER]={"version","valid","epoch","timebase_numer","timebase_denom","steady_after","completed_in","completed_out","steady_completed_in","steady_completed_out","admissions_in","admissions_out","steady_admissions_in","steady_admissions_out","dropped","unmatched_pump_in","unmatched_pump_out","sample_count","cpu_errors","policy_errors","policy_defaults","sampler_invalid","sampler_max_ns","overflow","drained_in","drained_out","basic_policy_changes","constraint_policy_changes","queue_depth","block_ms","entries"};
     static const char *metrics[FTU_DELIVERY_METRICS]={"packet_to_callback","callback_to_consumed","callback_pump_duration","preparation","submission","post_submit_observation","callback_to_resubmission","consumed_to_admission"};
     static const uint64_t limits[]={1000,2000,4000,8000,16000,32000,64000,128000,256000,512000,1000000,2000000,4000000,8000000,16000000,32000000,64000000};
     static const uint64_t thresholds[]={1000000,4000000,8000000,16000000};
@@ -724,6 +865,189 @@ static CFStringRef delivery_snapshot_text(const struct ftu_delivery_snapshot *s)
     CFStringAppend(text,CFSTR("]}"));return text;
 }
 
+
+static CFStringRef retry_snapshot_text(const struct ftu_retry_snapshot *s)
+{
+    static const char *header[FTU_RETRY_HEADER]={"version","valid","epoch","policy","wait_cutoff_bus_frames","lead_gate_bus_frames","retry_budget_ns","work_budget_ns","steady_after","timebase_numer","timebase_denom","waiting"};
+    static const char *counts[FTU_RETRY_COUNTS]={"checks","attempts","ready","deferrals","fallbacks","retries","over_budget","invalid_time","max_retry_ns","last_retry_ns"};
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<FTU_RETRY_HEADER;i++)CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":%llu"),i?",":"",header[i],(unsigned long long)s->header[i]);
+    for(unsigned bank=0;bank<2;bank++){
+        CFStringAppendFormat(text,NULL,CFSTR(",\"%s\":{"),bank?"steady":"all");
+        for(unsigned i=0;i<FTU_RETRY_COUNTS;i++)CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":%llu"),i?",":"",counts[i],(unsigned long long)s->counts[bank][i]);
+        CFStringAppend(text,CFSTR("}"));
+    }
+    CFStringAppend(text,CFSTR("}"));return text;
+}
+
+static CFStringRef startup_snapshot_text(const struct ftu_startup_snapshot *s)
+{
+    static const char *keys[12]={"version","valid","epoch","stage","outcome","config_status","prepare_status","activate_status","before_available","verify_available","prepare_state","activate_state"};
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<12;i++){
+        CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":"),i?",":"",keys[i]);
+        bool available=i==5?s->header[8]:i==6?s->header[10]==2:i==7?s->header[11]==2:true;
+        if(!available)CFStringAppend(text,CFSTR("null"));
+        else if(i>=5 && i<=7)CFStringAppendFormat(text,NULL,CFSTR("%lld"),(long long)(int64_t)s->header[i]);
+        else CFStringAppendFormat(text,NULL,CFSTR("%llu"),(unsigned long long)s->header[i]);
+    }
+    CFStringAppend(text,CFSTR(",\"writes\":["));
+    for(unsigned d=0;d<2;d++){
+        const uint64_t *w=s->writes[d];
+        CFStringAppendFormat(text,NULL,CFSTR("%s{\"endpoint\":%u,\"attempted\":%llu,\"returned\":%llu,\"status\":"),d?",":"",d?1:129,(unsigned long long)w[0],(unsigned long long)w[1]);
+        if(w[1])CFStringAppendFormat(text,NULL,CFSTR("%lld,\"actual\":%llu"),(long long)(int64_t)w[2],(unsigned long long)w[3]);
+        else CFStringAppend(text,CFSTR("null,\"actual\":null"));
+        CFStringAppend(text,CFSTR("}"));
+    }
+    CFStringAppend(text,CFSTR("],\"rates\":["));
+    for(unsigned i=0;i<2;i++){
+        if(i)CFStringAppend(text,CFSTR(","));
+        if(s->header[8+i])json_u64_array(text,s->rates[i],12);
+        else CFStringAppend(text,CFSTR("null"));
+    }
+    CFStringAppend(text,CFSTR("]}"));return text;
+}
+static CFStringRef failure_snapshot_text(const struct ftu_failure_snapshot *s)
+{
+    static const char *keys[FTU_FAILURE_HEADER]={"version","valid","present","epoch","reason","direction","sequence","ticket","slot","start_frame","checked_frame","returned_frame","admission_ticks","submit_status","completion_status","matched","callback_ticks","activated","drain_failed","cleanup_status","post_available","close_available","close_status","record_valid","submitted_in","submitted_out","completed_in","completed_out","pending_in","pending_out","finished","entries","queue_depth","block_ms","feedback_slots"};
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<FTU_FAILURE_HEADER;i++){
+        CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":"),i?",":"",keys[i]);
+        if(i==13 || i==14 || i==19 || i==22)
+            CFStringAppendFormat(text,NULL,CFSTR("%lld"),(long long)(int64_t)s->header[i]);
+        else CFStringAppendFormat(text,NULL,CFSTR("%llu"),(unsigned long long)s->header[i]);
+    }
+    CFStringAppend(text,CFSTR(",\"rates\":["));
+    for(unsigned i=0;i<2;i++){if(i)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->rates[i],FTU_FAILURE_RATE_WORDS);}
+    CFStringAppend(text,CFSTR("],\"info\":["));
+    for(unsigned i=0;i<2;i++){if(i)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->info[i],FTU_FAILURE_INFO_WORDS);}
+    CFStringAppend(text,CFSTR("],\"requested\":"));json_u64_array(text,s->requested,64);
+    CFStringAppend(text,CFSTR(",\"packets\":["));
+    for(unsigned i=0;i<64;i++){if(i)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->packets[i],4);}
+    CFStringAppend(text,CFSTR("],\"pump\":"));json_u64_array(text,s->pump,6);
+    CFStringAppend(text,CFSTR("}"));return text;
+}
+
+static CFStringRef pumps_snapshot_text(const struct ftu_pumps_snapshot *s)
+{
+    static const char *header[FTU_PUMPS_HEADER]={"version","valid","epoch","timebase_numer","timebase_denom","steady_after","calls","unavailable","invalid","dropped","overflow","id_discontinuities","link_misses"};
+    static const uint64_t limits[]={1000,2000,4000,8000,16000,32000,64000,128000,256000,512000,1000000,2000000,4000000,8000000,16000000,32000000,64000000};
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<FTU_PUMPS_HEADER;i++)CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":%llu"),i?",":"",header[i],(unsigned long long)s->header[i]);
+    CFStringAppend(text,CFSTR(",\"bucket_upper_ns\":"));json_u64_array(text,limits,17);
+    CFStringAppend(text,CFSTR(",\"counts\":["));
+    for(unsigned p=0;p<3;p++){if(p)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->counts[p],FTU_PUMPS_COUNTS);}
+    CFStringAppend(text,CFSTR("],\"metrics\":["));
+    for(unsigned p=0;p<3;p++){
+        CFStringAppend(text,p?CFSTR(",["):CFSTR("["));
+        for(unsigned m=0;m<FTU_PUMPS_METRICS;m++){if(m)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->metrics[p][m],FTU_PUMPS_HIST);}
+        CFStringAppend(text,CFSTR("]"));
+    }
+    CFStringAppend(text,CFSTR("],\"worst\":["));
+    for(unsigned p=0;p<3;p++){
+        CFStringAppend(text,p?CFSTR(",["):CFSTR("["));
+        for(unsigned m=0;m<FTU_PUMPS_METRICS;m++){if(m)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->worst[p][m],FTU_PUMPS_PAIR);}
+        CFStringAppend(text,CFSTR("]"));
+    }
+    CFStringAppend(text,CFSTR("],\"recent\":["));
+    for(unsigned i=0;i<FTU_PUMPS_RECENT;i++){if(i)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->recent[i],FTU_PUMPS_RECORD);}
+    CFStringAppend(text,CFSTR("],\"links\":["));
+    for(unsigned i=0;i<4;i++){if(i)CFStringAppend(text,CFSTR(","));json_u64_array(text,s->links[i],FTU_PUMPS_LINK);}
+    CFStringAppend(text,CFSTR("]}"));return text;
+}
+
+/* ftuH v1. Binding fields form one seqlock snapshot ("coherent":0 after bounded
+ * retries); counters and statuses are individually atomic. Property thread only. */
+static CFStringRef hotplug_text(void)
+{
+    uint32_t bound = 0, location = 0, before = 0;
+    uint64_t registry = 0;
+    bool coherent = false;
+    for (unsigned i = 0; i < 8 && !coherent; i++) {
+        before = atomic_load(&g_hp_seq);
+        bound = atomic_load(&g_hp_bound);
+        location = atomic_load(&g_hp_location);
+        registry = atomic_load(&g_hp_registry);
+        coherent = !(before & 1) && atomic_load(&g_hp_seq) == before;
+    }
+    return CFStringCreateWithFormat(NULL, NULL,
+        CFSTR("{\"version\":1,\"coherent\":%u,\"bound\":%u,\"product\":%u,\"location\":%u,\"registry_id\":%llu,\"rebinds\":%llu,\"removals\":%llu,\"reject\":%u,\"detach_status\":%d,\"rebind_status\":%d}"),
+        (unsigned)coherent, bound, g_product, location, (unsigned long long)registry,
+        (unsigned long long)atomic_load(&g_hp_rebinds), (unsigned long long)atomic_load(&g_hp_removals),
+        atomic_load(&g_hp_reject), atomic_load(&g_hp_detach_status), atomic_load(&g_hp_rebind_status));
+}
+
+/* ftuE v1. Flag-guarded and absent fields are null, never zero. Property thread only. */
+static CFStringRef runtime_snapshot_text(const struct ftu_runtime_snapshot *s)
+{
+    static const char *names[FTU_RUNTIME_WORDS]={"version","valid","present","epoch","reason","stage","flags","direction","sequence","slot","scheduled_frame","checked_frame","checked_ticks","returned_frame","returned_ticks","required_lead_frames","base_frame","prior_step_frame","prior_step_ticks","prior_progress_frame","prior_progress_ticks","steps","next_in","next_out","completed_in","completed_out","pending_in","pending_out","captured","prepared","timebase_numer","timebase_denom","min_out_return_lead","submit_status","uptime_ms","finished","drain_failed","cleanup_status","close_status","terminal_phase","terminal_fault","overwritten","records","queue_depth","block_ms","replay_ms"};
+    static const uint64_t required[FTU_RUNTIME_WORDS]={0,0,0,0,0,0,0,1,1,2,4,8,8,16,16,1,2048,32,32,64,64,0,0,0,0,0,0,0,0,0,1024,1024,128,256,0,0,0,0,512,0,0,0,0,0,0,0};
+    static const char *stages[]={"none","generic","completion_watchdog","out_before_readiness","before_packing","after_packing","after_return","submit_failed"};
+    const uint64_t *w=s->words;
+    bool present=w[1] && w[2],finished=present && w[35];
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<FTU_RUNTIME_WORDS;i++){
+        CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":"),i?",":"",names[i]);
+        bool record=i>2 && i!=41 && i!=42,terminal=i>=36 && i<=40;
+        if((record && !present) || (terminal && !finished) || (required[i] && !(w[6]&required[i])))CFStringAppend(text,CFSTR("null"));
+        else if(i==33 || i==37 || i==38 || i==40)CFStringAppendFormat(text,NULL,CFSTR("%lld"),(long long)(int64_t)w[i]);
+        else CFStringAppendFormat(text,NULL,CFSTR("%llu"),(unsigned long long)w[i]);
+    }
+    uint64_t stage=present?w[5]:0;
+    CFStringAppendFormat(text,NULL,CFSTR(",\"stage_name\":\"%s\"}"),stage<8?stages[stage]:"unknown");
+    return text;
+}
+
+/* ftuA v1 plus the monitor's own last call. Property thread only. */
+static CFStringRef recovery_snapshot_text(const struct ftu_recovery_snapshot *s)
+{
+    static const char *names[FTU_RECOVERY_WORDS]={"version","valid","enabled","state","refusal","consecutive","budget","attempts","recovered","failed","refused","cancelled","exhausted","healthy_resets","fault_epoch","recovered_epoch","last_status","pending_since_ms","due_ms","running_since_ms","healthy_ms","backoff0_ms","backoff1_ms","backoff2_ms","last_reason","binding","uptime_ms","clients","retired","time_flags"};
+    static const char *states[]={"idle","pending","recovered","refused","exhausted","cancelled","healthy"};
+    static const char *refusals[]={"none","quarantine","reason","cleanup","close","fault_code","no_record","unfinished","attempt_failed","profile","stage"};
+    const uint64_t *w=s->words;
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<FTU_RECOVERY_WORDS;i++){
+        CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":"),i?",":"",names[i]);
+        if(((i==17 || i==18) && !(w[29]&1)) || (i==19 && !(w[29]&2)))CFStringAppend(text,CFSTR("null"));
+        else if(i==16)CFStringAppendFormat(text,NULL,CFSTR("%lld"),(long long)(int64_t)w[i]);
+        else CFStringAppendFormat(text,NULL,CFSTR("%llu"),(unsigned long long)w[i]);
+    }
+    CFStringAppendFormat(text,NULL,CFSTR(",\"state_name\":\"%s\",\"refusal_name\":\"%s\",\"monitor_calls\":%llu,\"monitor_status\":%d}"),
+        w[3]<7?states[w[3]]:"unknown",w[4]<11?refusals[w[4]]:"unknown",
+        (unsigned long long)atomic_load(&g_recover_calls),atomic_load(&g_recover_status));
+    return text;
+}
+
+/* ftuQ: native ownership is separate from the unused legacy PoolSession ledger.
+ * Failed/unattempted operations stay distinguishable from successful zero. */
+static CFStringRef shutdown_snapshot_text(const struct ftu_shutdown_snapshot *s)
+{
+    static const char *names[FTU_SHUTDOWN_WORDS]={
+        "version","valid","present","epoch","stop_finished","native_stop_ok","rust_slots_retired","destroy_attempted","destroy_ok","callback_panic","cleanup_present","records",
+        "route_version","callbacks","faults","releases","acknowledgements","rejections","native_pending","native_held","native_returned","stop_requested","joined","quarantined","poisoned","ever_timed_out","abort_in","abort_out",
+        "cleanup_version","cleanup_attempted","removed_mask","restored_mask","open_mask","cleanup_fatal","restore_in","read_alt_in","destroy_data_in","destroy_frames_in","close_in","restore_out","read_alt_out","destroy_data_out","destroy_frames_out","close_out"};
+    const uint64_t *w=s->words;bool present=w[0]==1 && w[1]==1 && w[2]==1;
+    CFMutableStringRef text=CFStringCreateMutable(NULL,0);if(!text)return NULL;
+    CFStringAppend(text,CFSTR("{"));
+    for(unsigned i=0;i<FTU_SHUTDOWN_WORDS;i++){
+        CFStringAppendFormat(text,NULL,CFSTR("%s\"%s\":"),i?",":"",names[i]);
+        bool absent=i>=3 && i!=11 && !present;
+        if(i>=12 && i<28)absent|=w[12]!=1;
+        if(i>=28)absent|=w[10]!=1 || w[28]!=1;
+        if(i>=34)absent|=!(w[29]&(1ull<<(i-34)));
+        if(absent)CFStringAppend(text,CFSTR("null"));
+        else if(i==26 || i==27 || i>=33)CFStringAppendFormat(text,NULL,CFSTR("%lld"),(long long)(int64_t)w[i]);
+        else CFStringAppendFormat(text,NULL,CFSTR("%llu"),(unsigned long long)w[i]);
+    }
+    CFStringAppend(text,CFSTR("}"));return text;
+}
+
 static OSStatus ftu_get_data(AudioServerPlugInDriverRef drv, AudioObjectID obj, pid_t pid,
                              const AudioObjectPropertyAddress *a, UInt32 qsize, const void *qdata,
                              UInt32 size, UInt32 *out_size, void *out)
@@ -743,6 +1067,45 @@ static OSStatus ftu_get_data(AudioServerPlugInDriverRef drv, AudioObjectID obj, 
         n = size >= s.size ? s.size : size / s.elem * s.elem;
     else if (size < s.size)
         return kAudioHardwareBadPropertySizeError;
+    if (obj == kObjDevice && a->mSelector == FTU_HOTPLUG_PROPERTY) {
+        CFStringRef text=hotplug_text();if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_RUNTIME_PROPERTY) {
+        struct ftu_runtime_snapshot snapshot={0};ftu_live_runtime_fault(live_handle(),&snapshot);
+        CFStringRef text=runtime_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_RECOVERY_PROPERTY) {
+        struct ftu_recovery_snapshot snapshot={0};ftu_live_recovery(live_handle(),&snapshot);
+        CFStringRef text=recovery_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_SHUTDOWN_PROPERTY) {
+        struct ftu_shutdown_snapshot snapshot={0};ftu_live_shutdown(live_handle(),&snapshot);
+        CFStringRef text=shutdown_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_RETRY_PROPERTY) {
+        struct ftu_retry_snapshot snapshot={0};ftu_live_retry(live_handle(),&snapshot);
+        CFStringRef text=retry_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_STARTUP_PROPERTY) {
+        struct ftu_startup_snapshot snapshot={0};ftu_live_startup(live_handle(),&snapshot);
+        CFStringRef text=startup_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_FAILURE_PROPERTY) {
+        struct ftu_failure_snapshot snapshot={0};ftu_live_first_failure(live_handle(),&snapshot);
+        CFStringRef text=failure_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
+    if (obj == kObjDevice && a->mSelector == FTU_PUMPS_PROPERTY) {
+        struct ftu_pumps_snapshot snapshot={0};ftu_live_pumps(live_handle(),&snapshot);
+        CFStringRef text=pumps_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
+        memcpy(out,&text,sizeof text);*out_size=sizeof text;return 0;
+    }
     if (obj == kObjDevice && a->mSelector == FTU_DELIVERY_PROPERTY) {
         struct ftu_delivery_snapshot snapshot={0};ftu_live_delivery(live_handle(),&snapshot);
         CFStringRef text=delivery_snapshot_text(&snapshot);if(!text)return kAudioHardwareUnspecifiedError;
@@ -808,10 +1171,20 @@ static OSStatus ftu_start_io(AudioServerPlugInDriverRef drv, AudioObjectID dev, 
     struct ftu_live *live = device_live(drv, dev);
     if (!live)
         return kAudioHardwareBadDeviceError;
+    /* Capture the publication before the alive check and before queueing on the
+     * Rust session lock, so a StartIO racing a detach/rebind never opens the new unit. */
+    uint64_t binding = ftu_live_binding(live);
     if (!atomic_load(&g_alive))
         return kAudioHardwareNotRunningError;
-    /* On success Rust guarantees ftu_live_timestamp() is valid; there is no host-clock fallback. */
-    return ftu_live_start(live, client) == 0 ? kAudioHardwareNoError : kAudioHardwareUnspecifiedError;
+    /* On success Rust guarantees ftu_live_timestamp() is valid; there is no host-clock fallback.
+     * -6: removed or rebound after the alive check; Rust refused under its lock.
+     * -9: this client ID was active when the unit was removed and its old session was
+     *     never stopped/removed; the app may need to stop and reopen the device. */
+    int32_t rc = ftu_live_start_bound(live, client, binding);
+    return rc == 0    ? kAudioHardwareNoError
+           : rc == -6 ? kAudioHardwareNotRunningError
+           : rc == -9 ? kAudioHardwareIllegalOperationError
+                      : kAudioHardwareUnspecifiedError;
 }
 
 static OSStatus ftu_stop_io(AudioServerPlugInDriverRef drv, AudioObjectID dev, UInt32 client)

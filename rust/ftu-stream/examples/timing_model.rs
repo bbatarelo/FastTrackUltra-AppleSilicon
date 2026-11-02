@@ -93,7 +93,7 @@ fn run(g: Geometry, stress: Stress, phase: usize) -> ResultRow {
 fn run_config(g: Geometry, stress: Stress, phase: usize, options: Options) -> ResultRow {
     assert!(options.feedback_slots > 0);
     let history = options.feedback_slots;
-    assert!((1..=8).contains(&g.block_ms) && (2..=8).contains(&g.depth));
+    assert!((1..=8).contains(&g.block_ms) && (2..=32).contains(&g.depth));
     let block = g.block_ms * 8;
     let count = 2200 / g.block_ms;
     let mut slots: [Vec<Option<Flight>>; 2] = array::from_fn(|_| vec![None; g.depth]);
@@ -372,6 +372,8 @@ fn completion_study() {
         (4, 6, 32),
         (4, 7, 32),
         (4, 8, 32),
+        (4, 8, 64),
+        (4, 10, 64),
         (4, 8, 8),
         (4, 8, 12),
         (4, 8, 16),

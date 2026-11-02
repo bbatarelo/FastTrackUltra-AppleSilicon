@@ -142,3 +142,13 @@ impl WorkerSample {
         ]
     }
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct PumpObservation {
+    pub pump: Pump,
+    pub callbacks: u64,
+    pub first_callback_ticks: u64,
+    pub last_callback_ticks: u64,
+    pub invalid_callbacks: u64,
+}

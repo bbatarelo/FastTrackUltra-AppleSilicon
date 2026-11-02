@@ -129,8 +129,15 @@ at 48 kHz. Listening tests so far cover physical outputs 1 and 2.
 **Device missing:** run `make check` if you have the source build. If it reports
 no published device, check USB and power and reopen the audio application. Keep
 the complete output when reporting the problem; do not assume that installing
-files means the driver loaded successfully. Changing USB ports, sleep/wake and
-automatic recovery remain unqualified, so report those events.
+files means the driver loaded successfully. Unplugging, replugging or moving
+the interface to another port or hub with the [reconnect candidate](HOTPLUG-RECONNECT.md)
+should republish it within about a second
+when it is the only Fast Track Ultra connected; restart audio in the
+application. If the application still cannot start the device, stop and reopen
+the device in that application. This is tested offline only, for an idle or
+cleanly stopped interface. Unplugging during playback or recording may leave
+the device listed but not alive until CoreAudio restarts. Sleep/wake and
+recovery from a fault remain unqualified, so report those events.
 
 **An installer is blocked by macOS:** the current packages are local development
 artifacts. Use a trusted signed release when available; do not reduce system

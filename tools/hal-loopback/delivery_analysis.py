@@ -36,7 +36,7 @@ def analyze(s, expected_epoch=None, require_observed=True):
     try:
         need(isinstance(s, dict), 'missing_snapshot')
         need(all(uint(s[k]) for k in COUNTERS), 'invalid_header')
-        need(s['version'] == 1 and s['valid'] == 1, 'unsupported_or_incoherent')
+        need(s['version'] in (1,2) and s['valid'] == 1, 'unsupported_or_incoherent')
         need(s['steady_after'] == 48000, 'steady_threshold')
         if expected_epoch is not None:
             need(s['epoch'] == expected_epoch, 'epoch_mismatch')
@@ -48,6 +48,13 @@ def analyze(s, expected_epoch=None, require_observed=True):
             need(s['sample_count'] >= 2, 'missing_worker_samples')
         if total or s['sample_count']:
             need(s['timebase_numer'] > 0 and s['timebase_denom'] > 0, 'missing_timebase')
+        depth=4
+        if s['version']==2:
+            geometry=('queue_depth','block_ms','entries')
+            need(all(uint(s[k]) for k in geometry),'invalid_geometry_word')
+            if total or s['sample_count'] or any(s[k] for k in geometry):
+                depth=s['queue_depth']
+                need(2<=depth<=32 and s['block_ms'] in (1,2,4,8) and s['entries']==8*s['block_ms'],'invalid_geometry')
         scale = s['timebase_numer'] / s['timebase_denom'] if s['timebase_denom'] else None
         for k in ('dropped', 'overflow', 'sampler_invalid', 'cpu_errors', 'policy_errors'):
             if s[k]:
@@ -100,7 +107,7 @@ def analyze(s, expected_epoch=None, require_observed=True):
                     else:
                         need(r[k] is None or uint(r[k]), 'optional_record_word')
                 need(1 <= r['ordinal'] <= total and r['direction'] in (0, 1), 'record_identity')
-                need(r['ticket'] == r['sequence']+1 and r['slot'] == r['sequence'] % 4, 'record_generation')
+                need(r['ticket'] == r['sequence']+1 and r['slot'] == r['sequence'] % depth, 'record_generation')
                 need(r['ordinal'] not in seen or seen[r['ordinal']] == r, 'cross_bank_mismatch')
                 seen[r['ordinal']] = r
                 ordinals.append(r['ordinal']); directions.append(r['direction'])
@@ -143,12 +150,12 @@ def analyze(s, expected_epoch=None, require_observed=True):
             need(1 <= e['ordinal'] <= s['admissions_in']+s['admissions_out'], 'lead_ordinal')
             need(all(e[key] in (0, None) for key in ('check_status', 'submit_status', 'return_clock_status')), 'lead_status')
             if e['flags'] & 1:
-                need(e['previous_sequence']+4 == e['sequence'], 'lead_previous')
+                need(e['previous_sequence']+depth == e['sequence'], 'lead_previous')
             chain = [e[k] for k in FIELDS[23:29] if e[k] is not None]
             need(all(a <= b for a, b in zip(chain, chain[1:])), 'lead_stage_order')
 
             need(e['direction'] in (0, 1) and e['captured'] >= 48000, 'lead_identity')
-            need(e['slot'] == e['sequence'] % 4 and e['ticket'] == e['sequence']+1, 'lead_generation')
+            need(e['slot'] == e['sequence'] % depth and e['ticket'] == e['sequence']+1, 'lead_generation')
             directions.append(e['direction'])
             feedback = item['feedback_pump']
             if feedback is not None:
@@ -157,7 +164,7 @@ def analyze(s, expected_epoch=None, require_observed=True):
                 need(feedback['enter_ticks'] <= e['feedback_callback_ticks'] <= feedback['exit_ticks'] <= e['feedback_consumed_ticks'], 'feedback_pump_order')
 
             if p is not None:
-                need(e['flags'] & 1 and e['previous_sequence']+4 == e['sequence'], 'lead_predecessor')
+                need(e['flags'] & 1 and e['previous_sequence']+depth == e['sequence'], 'lead_predecessor')
                 need(p['id'] > 0 and p['result'] in (1, 2, 3, 4), 'lead_pump')
                 need(p['enter_ticks'] <= e['previous_callback_ticks'] <= p['exit_ticks'] <= e['previous_consumed_ticks'], 'lead_pump_order')
         need(len(set(directions)) == len(directions), 'duplicate_lead_direction')

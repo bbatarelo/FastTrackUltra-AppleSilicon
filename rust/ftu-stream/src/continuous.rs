@@ -57,6 +57,9 @@ pub unsafe extern "C" fn ftu_stream_run(
     };
     let path = Path::new(directory);
     let ops = &*ops;
+    if !ops.compatible() {
+        return 2;
+    }
     let files = (|| -> io::Result<_> {
         Ok((
             new_file(path, "plan.json")?,

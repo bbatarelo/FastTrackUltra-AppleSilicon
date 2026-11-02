@@ -6,6 +6,7 @@
 #include "../hal-check/main.c"
 #undef main
 #include <signal.h>
+#include <mach/mach_time.h>
 
 #ifndef FTU_LOOPBACK_MAX_SECONDS
 #define FTU_LOOPBACK_MAX_SECONDS 30
@@ -168,7 +169,20 @@ int main(int argc,char **argv) {
     if(created) {if(requested) request_buffer(dev,original,"restore");return 1;}
     if(requested) request_buffer(dev,requested,"after_create");
     signal(SIGINT,interrupt_handler); signal(SIGTERM,interrupt_handler);
-    OSStatus started=AudioDeviceStart(dev,proc); printf("start: %d\n",started); report_buffer(dev,"running");
+    mach_timebase_info_data_t start_tb={0};kern_return_t start_tb_status=mach_timebase_info(&start_tb);
+    struct session_guard guard=guard_before_start(dev);
+    uint64_t start_begin=mach_absolute_time();
+    OSStatus started=AudioDeviceStart(dev,proc);
+    uint64_t start_end=mach_absolute_time();
+    printf("start: %d\n",started);
+    printf("start timing: begin_ticks=%llu end_ticks=%llu timebase_status=%d numer=%u denom=%u\n",
+        (unsigned long long)start_begin,(unsigned long long)start_end,start_tb_status,start_tb.numer,start_tb.denom);
+    print_string(dev,'ftuS',"after start status");
+    AudioObjectPropertyAddress startup_property={'ftuI',kAudioObjectPropertyScopeGlobal,0};
+    AudioObjectPropertyAddress failure_property={'ftuF',kAudioObjectPropertyScopeGlobal,0};
+    if(AudioObjectHasProperty(dev,&startup_property))print_string(dev,'ftuI',"after start startup");
+    if(AudioObjectHasProperty(dev,&failure_property))print_string(dev,'ftuF',"after start first failure");
+    report_buffer(dev,"running");
     unsigned polls=0;
     if(!started) while(!atomic_load(&s.done) && !atomic_load(&s.error) && !interrupted && polls<(MAX_SECONDS+5)*10) {
         CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.001,false);
@@ -177,12 +191,15 @@ int main(int argc,char **argv) {
             print_string(dev,'ftuS',"running status");
             if(timing)print_string(dev,'ftuT',"running timing");
         }
-        if(!status_is(dev,"\"phase\":2")) {atomic_store(&s.error,6);break;}
+        if(!guard_matches(dev,guard) || !status_is(dev,"\"phase\":2")) {atomic_store(&s.error,6);break;}
         fflush(stdout); polls++;
     }
     OSStatus stopped=started?0:AudioDeviceStop(dev,proc),destroyed=AudioDeviceDestroyIOProcID(dev,proc);
+    if(!started && !guard_matches(dev,guard))atomic_store(&s.error,6);
     printf("stop: %d destroy: %d interrupted: %d done: %d error: %u\n",stopped,destroyed,interrupted,atomic_load(&s.done),atomic_load(&s.error));
     print_string(dev,'ftuS',"stopped status");
+    if(AudioObjectHasProperty(dev,&startup_property))print_string(dev,'ftuI',"stopped startup");
+    if(AudioObjectHasProperty(dev,&failure_property))print_string(dev,'ftuF',"stopped first failure");
     if(timing)print_string(dev,'ftuT',"stopped timing");
     if(stopped || destroyed) return 1; /* process exit owns callback storage on failed teardown */
     if(requested) request_buffer(dev,original,"restore"); report_buffer(dev,"final");

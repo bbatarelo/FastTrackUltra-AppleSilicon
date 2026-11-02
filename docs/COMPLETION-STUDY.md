@@ -1,5 +1,12 @@
 # Completion delivery and shorter USB transfers
 
+**20 October follow-through:** the all-pump hardware session is complete. Its
+signal/timing checks were valid but its unchanged-latency comparison failed.
+The [shorter-transfer decision](SHORTER-TRANSFERS.md) selects an offline 4 ms /
+eight-slot prototype and a 1 ms-capable design. The original investigation and
+model limits below remain evidence, not a hardware qualification.
+
+
 Offline investigation, 18 October 2026, following checkpoint `75b1a75`
 (`Qualify longer duplex sessions and GarageBand transitions`).
 

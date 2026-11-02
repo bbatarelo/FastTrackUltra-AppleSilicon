@@ -31,10 +31,10 @@ static bool buffer_set(AudioDeviceID device,UInt32 requested){
     printf("buffer: requested=%u, actual=%u, set_status=%d\n",requested,actual,rc);
     return rc==0 && actual==requested;
 }
-static bool observe(AudioDeviceID device,const char *stage,unsigned seconds,struct counters *a,struct counters *b){
+static bool observe(AudioDeviceID device,const char *stage,unsigned seconds,struct counters *a,struct counters *b,struct session_guard guard){
     for(unsigned s=0;s<seconds;s++){
         sleep(1);printf("stage: %s\n",stage);
-        if(!print_string(device,'ftuS',"status") || !status_is(device,"\"phase\":2") ||
+        if(!guard_matches(device,guard) || !print_string(device,'ftuS',"status") || !status_is(device,"\"phase\":2") ||
            atomic_load(&a->invalid) || atomic_load(&a->gaps) || atomic_load(&b->invalid) || atomic_load(&b->gaps))return false;
         fflush(stdout);
     }
@@ -48,17 +48,18 @@ int main(int argc,char **argv){
     AudioDeviceID device=find_device();if(!device || !describe(device) || !status_is(device,"\"phase\":0"))return 1;
     UInt32 original=0;if(get(device,kAudioDevicePropertyBufferFrameSize,kAudioObjectPropertyScopeGlobal,sizeof original,&original))return 1;
     struct counters a={0},b={0};AudioDeviceIOProcID proc[2]={NULL,NULL};bool active[2]={false,false},ok=false;
-    OSStatus stopped[2]={0,0},destroyed[2]={0,0};
+    OSStatus stopped[2]={0,0},destroyed[2]={0,0};struct session_guard guard={0,false};
     if(requested && !buffer_set(device,requested))goto cleanup;
     if(AudioDeviceCreateIOProcID(device,io,&a,&proc[0]) || AudioDeviceCreateIOProcID(device,io,&b,&proc[1]))goto cleanup;
+    guard=guard_before_start(device);
     if(AudioDeviceStart(device,proc[0]))goto cleanup;active[0]=true;
-    if(!observe(device,"A only",5,&a,&b))goto cleanup;
+    if(!observe(device,"A only",5,&a,&b,guard))goto cleanup;
     if(AudioDeviceStart(device,proc[1]))goto cleanup;active[1]=true;
-    if(!observe(device,"A and B",5,&a,&b))goto cleanup;
+    if(!observe(device,"A and B",5,&a,&b,guard))goto cleanup;
     stopped[0]=AudioDeviceStop(device,proc[0]);if(stopped[0])goto cleanup;active[0]=false;
     destroyed[0]=AudioDeviceDestroyIOProcID(device,proc[0]);if(destroyed[0])goto cleanup;proc[0]=NULL;
     uint64_t before=atomic_load(&b.calls);
-    if(!observe(device,"B after A stopped",hold,&a,&b) || atomic_load(&b.calls)<=before)goto cleanup;
+    if(!observe(device,"B after A stopped",hold,&a,&b,guard) || atomic_load(&b.calls)<=before)goto cleanup;
     ok=true;
 cleanup:
     for(unsigned i=0;i<2;i++){
@@ -67,7 +68,7 @@ cleanup:
         if(stopped[i] || destroyed[i])ok=false;
     }
     print_string(device,'ftuS',"stopped status");
-    if(!status_is(device,"\"phase\":0"))ok=false;
+    if(!guard_matches(device,guard) || !status_is(device,"\"phase\":0"))ok=false;
     if(requested && !buffer_set(device,original))ok=false;
     printf("A: calls=%llu, frames=%llu, invalid=%llu, gaps=%llu, stop=%d, destroy=%d\n",(unsigned long long)atomic_load(&a.calls),(unsigned long long)atomic_load(&a.frames),(unsigned long long)atomic_load(&a.invalid),(unsigned long long)atomic_load(&a.gaps),stopped[0],destroyed[0]);
     printf("B: calls=%llu, frames=%llu, invalid=%llu, gaps=%llu, stop=%d, destroy=%d\n",(unsigned long long)atomic_load(&b.calls),(unsigned long long)atomic_load(&b.frames),(unsigned long long)atomic_load(&b.invalid),(unsigned long long)atomic_load(&b.gaps),stopped[1],destroyed[1]);

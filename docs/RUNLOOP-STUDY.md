@@ -7,7 +7,9 @@ Offline follow-up, 19 October 2026, to the qualified
 confirms that total run-loop duration and message-delivery delay must be measured
 separately. It does not identify the cause of the FTU's 8.650 ms completion delay.
 The next proposed driver experiment records every pump; wait observers are an
-optional later condition. Neither is implemented or installed by this study.
+optional later condition. The [all-pump candidate](ALL-PUMP-OBSERVATION.md) now implements the first of
+these as a separate observation-only follow-up, pending hardware tests. Wait
+observers remain unimplemented.
 
 ## Why this control
 

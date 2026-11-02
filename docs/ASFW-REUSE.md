@@ -344,3 +344,189 @@ messages show that a long whole pump can coexist with prompt message delivery.
 Before/after-wait observations can locate elapsed time but cannot identify when
 a USB completion became ready in the kernel. This is FTU follow-up methodology,
 not ASFW implementation reuse or evidence of an E-MU fault.
+
+## Shorter-transfer decision and Fireface comparison — 20 October 2026
+
+The [ten-minute 128-frame result and design decision](SHORTER-TRANSFERS.md)
+move FTU from measurement work to a configurable 4/2/1 ms transport design.
+The first profile is 4 ms / eight slots with unchanged safety margins; it is
+an offline prototype, not a claimed latency reduction. The goal is measured
+analog RTL below 10 ms at 48 kHz, with actual HAL buffer size always stated.
+
+The implementation was rechecked in the owner's separate ASFW checkout at
+`e1dd001cb729dd4f958066fbc592c362140c8ba4`. The eight inspected implementation/
+ownership files were unmodified; `documentation/RME_FIREFACE_800_BRINGUP.md` was
+untracked work in progress. Its exact contents were snapshotted at
+2026-10-20T12:37:32Z. Do not assume that build-20 measurements describe subsequent
+RME changes. The source/hash manifest is in ignored local evidence:
+`build/validation/all-pump-decision-20261020/reference/manifest.json`.
+
+The Fireface notes record 5/5 accepted impulse trials at 48 kHz, actual 512
+frames and FireWire S400: 1243.773 frames / **25.912 ms** raw RTL. Scheduling
+was 1152 frames (2×512 + 64 input + 64 output); timestamp-relative path was
+91.773 frames / 1.912 ms. FTU's same-buffer baseline is 97.206 ms. This is a
+useful architectural comparison. The RME tone/endurance tests also exposed
+capture faults, and the current profile raises FF800 input safety to 256
+frames. Keep those stability results separate from the initial latency result.
+
+| Inspected implementation | Specific mechanism | FTU action / later E-MU audit |
+|---|---|---|
+| `ASFWAudioDriverOutputWrite.cpp` | `HandleOutputWriteEnd` fills PCM on the CoreAudio IO thread, then requests preparation separately; no allocation or blocking lock in the fill | Separate PCM deadlines from descriptor scheduling in the design. Audit whether the USB API permits any equivalent late operation before changing buffer ownership. |
+| `AudioTimingGeometry.hpp` | 1 ms completion groups; 63 ms hardware ring, 126 ms preparation coverage, but a two-packet / 250 µs finality guard | Distinguish storage/transport coverage from audio latency. FTU starts with shorter immutable USB transfers; queue duration alone is not a latency result. |
+| `AmdtpPayloadWriter.cpp` | Valid generation, exposed frame interval and first-writable packet govern each write; written/missing/deadline cases counted separately | Test actual missing middle frames, expired slots and wrap, not only future high-water. Preserve explicit ticket/epoch and callback debt in USB. |
+| `ResolvedTimingGeometry.hpp` | Input safety is at least the completion-batch frame count; one resolved configuration supplies runtime behavior and declarations | Reduce capture batch size before proposing a smaller input budget; derive and validate capacities together. |
+| `PlaybackRingRange.hpp` | Tracks oldest valid frame and written end with discontinuity/overrun handling | Audit contiguous PCM validity and old ring-lap rejection independently of transport progress. |
+| `Config/RME/FirefaceProfile.hpp`, `AudioProfileRegistry.cpp` | Native 48 kHz, RX-derived TX replay; FF800 input margin changed after observed starvation | Keep count replay, converter declarations and safety as separate concepts. Derive margins from each device's evidence; never import RME constants. |
+
+For E-MU, the concrete later review should draw its HAL-write → payload-finality
+→ service → capture-publication → HAL-read timeline, identify which buffers are
+legally writable at each point, then compare callback granularity, publication
+cadence, valid ranges and actual miss counters. Reuse the test invariants and
+geometry separation. A proposed IO-thread copy must first be bounded and legal
+for E-MU's transport; this is not a recommendation to submit USB requests from
+CoreAudio callbacks or to overwrite in-flight data.
+
+Apple's local `IOUSBLib.h` (SDK source hashed in the same manifest) documents
+completed-frame visibility before the final low-latency isoch callback. This
+makes earlier IN publication a possible separate USB investigation. It does
+not establish a complete ARM64 synchronization/abort protocol and does not
+license ASFW-style writes to pending OUT transfers. The first shorter FTU
+profile keeps the current completion-controlled lifetime.
+
+The referenced ASFW implementation is available at this inspected commit:
+[output fill](https://github.com/mrmidi/ASFireWire/blob/e1dd001cb729dd4f958066fbc592c362140c8ba4/ASFWDriver/Audio/DriverKit/ASFWAudioDriverOutputWrite.cpp),
+[geometry](https://github.com/mrmidi/ASFireWire/blob/e1dd001cb729dd4f958066fbc592c362140c8ba4/ASFWDriver/Shared/Isoch/AudioTimingGeometry.hpp),
+[payload ownership](https://github.com/mrmidi/ASFireWire/blob/e1dd001cb729dd4f958066fbc592c362140c8ba4/ASFWDriver/Audio/Wire/AMDTP/AmdtpPayloadWriter.cpp).
+These references were read locally. The untracked Fireface bring-up notes are
+not represented by those commit links. No ASFW runtime code or E-MU files were
+changed or integrated.
+
+## Bounded PCM readiness implemented offline — 20 October
+
+The [PCM-readiness prototype](PCM-READY-PROTOTYPE.md) is a concrete FTU test of
+separating queue capacity from payload preparation. Eager ten-slot scheduling
+passed the lead screen but failed 381/384 delayed-HAL PCM cases. The new policy
+keeps that capacity, stages only an exact valid sample interval when possible,
+and defers incomplete data within a separate deadline. A successful snapshot
+is owned by the USB worker; subsequent HAL writes cannot change it. Pending
+USB requests remain immutable, unlike ASFW's transport-specific late-fill path.
+
+For a later E-MU audit, evaluate these specific mechanisms: exact tagged-interval
+coverage instead of high-water, an owned snapshot between readiness and packing,
+bounded deferral that keeps capture/completions progressing, a fresh native
+clock check after submission, and explicit loss accounting when a permanent
+hole reaches its deadline. Test the missing-writer/capture-only case so a new
+playback policy cannot stall recording. Compare startup separately from steady
+loss, preserve the failed eager reference, and retain hardware loopback as the
+qualification step. Model owner wake intervals independently from HAL/hardware
+progress: a nominal pump timeout does not bound its return time. Claude's review
+exposed that missing dimension; the first 18 ms cutoff failed a coarse-pump
+capture-only regression. FTU now reserves 8 ms for retries and 2 ms for work
+above its 16 ms lead gate (26 ms cutoff). These are experiment constants, not
+E-MU recommendations. Combined 8 ms cadence / 12.5 ms stall still fails in
+both eager and ready models; keep that rejection visible. Preparation telemetry
+must begin before the first staging read, not just the eventual pack. No E-MU
+files were changed.
+
+
+## Service cost and retry observations — 20 October
+
+The [combined-cost follow-up](RETRY-COST-OBSERVATION.md) supplies another concrete
+E-MU audit pattern: combine callback/pump delay with the cost of every native
+submission and preparation, advancing the HAL clock through that work. A per-call
+allowance alone does not bound the delay from a batch of IN calls before an OUT
+request is considered. Compare eager and ready policies on identical workloads,
+and keep output-only costs separate from costs on both directions.
+
+Publish deferral decisions, fallback decisions, measured retry intervals and
+budget exceedances with epoch identity and bounded coherent reads. These describe
+readiness, not audio health: data can arrive before a fallback read, and a fully
+ready payload can still miss its submission deadline. Retain actual PCM-loss
+and terminal-failure accounting alongside them. A final unresolved wait must
+remain visible instead of being counted as a zero-duration retry. No E-MU files
+were changed; USB's immutable submitted-payload contract remains in force.
+
+
+## Deadline ordering and bounded catch-up — 20 October
+
+The [FTU deadline experiment](DEADLINE-SUBMISSIONS.md) supplies a further E-MU
+audit item: compare each direction's effective service deadline, rather than
+filling one direction's free slots first. Reconcile ownership after bounded
+work; separately cap total catch-up before native callback dispatch. Retain
+capture-only progress and actual input-loss checks, because an OUT headroom
+improvement can coexist with stale capture publication. Re-polling a completion
+flag cannot dispatch a callback; the fake transport must enforce that distinction.
+
+This is an FTU experiment inspired by the broader timing/ownership comparison,
+not a claim that ASFW uses this exact scheduler or these constants. The 8 ms
+stall/cost screen improves, while larger stalls and overload remain rejected.
+For E-MU, audit its own queue generation, callback dispatch and service costs
+before choosing bounds. No E-MU files or ASFW source were changed.
+
+
+## Callback service versus idle waiting (20 October 2026)
+
+The [FTU callback-dispatch model](CALLBACK-DISPATCH-MODEL.md) adds a concrete
+cross-project test discipline: represent callback readiness, actual delivery,
+consumption and idle waiting as separate events. Charge callback and owner-entry
+costs even when skipping an idle wait. Bound callback batches as well as submission
+catch-up; a bounded batch can still delay capture publication enough to lose input.
+Pair wait-first and ready-first policies under identical costs before attributing
+a gain to one policy. Keep an independent sample-placement model and retain
+failures when its scheduling assumptions produce different results.
+
+For a later E-MU audit, measure ready-to-delivered and delivered-to-published
+intervals separately, then replay measured cost distributions against its own
+capture deadlines. A zero-timeout or short run-loop call is not proof of prompt
+service. This is an FTU-derived modelling lesson motivated by the earlier ASFW
+comparison, not a claim that ASFW implements this proposed pump or has the same
+USB constraints. No E-MU source was changed.
+
+
+## Publication batching and owner availability (20 October 2026)
+
+The [FTU capture-delivery traces](CAPTURE-DELIVERY.md) distinguish two failures
+that look identical in a missing-sample counter. One callback finishes before the
+HAL deadline, but publication waits behind further callbacks. Publishing through
+the existing validated, ordered path between dispatches fixes that delay. In the
+other, the request becomes ready during a combined idle/stall interval and the
+HAL deadline expires before the owner returns. No publication-order change can
+repair that read after the fact.
+
+For a later E-MU audit, trace the first missing sample back to its precise USB
+request and compare physical readiness, callback delivery, ordered publication
+and HAL read deadline. Budget completion-batch age as well as owner unavailability.
+Keep event-driven waiting distinct from involuntary scheduling delay; shortening
+a requested timeout does not establish a wake bound. Bounded callback draining
+must also preserve urgent output submissions and stop/fault responsiveness.
+These are FTU-derived lessons motivated by the ASFW comparison, not claims about
+ASFW's implementation. No E-MU files were changed.
+
+
+### FTU follow-up: fixed absence and explicit slot return
+
+The [fixed-time FTU replay](FIXED-STALL-REPLAY.md) adds another E-MU audit method:
+freeze the same absence windows when comparing scheduling changes, distinguish
+wakeable wait from unavailable execution, and trace the first required sample.
+When evaluating independent capture, include a release acknowledgement before
+slot reuse and carry its back-pressure into both input and output deadlines.
+Zero read misses alone can hide reuse before the copy finishes; a capture fix
+can also leave output scheduling failures intact. These are FTU-derived lessons,
+not claims about ASFW's implementation or E-MU's current behavior. No E-MU source
+or ASFW source was changed.
+
+
+### FTU follow-up: a completion handoff must include output coverage
+
+The [independent-completion implementation](INDEPENDENT-COMPLETION.md) supplies
+concrete later E-MU audit items: generation-tagged release acknowledgements,
+ordered count backpressure, a single capture-clock writer, callback-before-submit-
+return races, and storage retention until both contexts are quiescent. Test the
+same protocol with real threads and a deterministic HAL/USB fixture. Charge
+handoff work without overlapping it with copy work, and include output deadlines
+when evaluating an input-delivery fix. Pre-stall queue coverage gives a necessary
+outage bound; it does not turn an observed deadline check into a prediction.
+
+These are FTU findings developed from the broader ASFW timing/ownership comparison,
+not claims that ASFW uses this exact thread topology or that E-MU needs it.
+Submitted USB PCM remains immutable. No E-MU or ASFW source was changed.
